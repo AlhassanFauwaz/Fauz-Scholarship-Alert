@@ -17,11 +17,6 @@ import feedbackRoutes from "./routes/feedback.js";
 import subscriptionRoutes from "./routes/subscriptions.js";
 import { startDeadlineScheduler } from "./jobs/deadlineScheduler.js";
 
-connectDB();
-
-connectDB().then(() => {
-  startDeadlineScheduler();
-});
 const app = express();
 
 app.use(helmet());
@@ -48,7 +43,20 @@ app.use((err, req, res, next) => {
   res.status(500).json({ message: "Something went wrong!" });
 });
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+const PORT = Number(process.env.PORT) || 5000;
+
+const startServer = async () => {
+  try {
+    await connectDB();
+    startDeadlineScheduler();
+
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server running on port ${PORT}`);
+    });
+  } catch (error) {
+    console.error("Server startup failed:", error.message);
+    process.exit(1);
+  }
+};
+
+startServer();
