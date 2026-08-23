@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const API = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'https://fauz-scholarship-alert-1.onrender.com/api',
+  baseURL: 'https://fauz-scholarship-alert-1.onrender.com/api',
 });
 
 API.interceptors.request.use((config) => {
