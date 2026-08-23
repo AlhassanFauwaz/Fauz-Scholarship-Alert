@@ -1,0 +1,96 @@
+@import "tailwindcss";
+
+:root {
+  --brand-navy: #0a2b3c;
+  --brand-green: #1c9c4d;
+  --brand-green-dark: #167f3f;
+  --brand-bg: #f4f8fa;
+  --brand-surface: #ffffff;
+  --brand-surface-soft: #edf5f8;
+  --brand-text: #0a2b3c;
+  --brand-muted: #536b78;
+  --brand-border: #dfe9ee;
+  --brand-shadow: 0 15px 35px rgba(10, 43, 60, 0.12);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: linear-gradient(180deg, #f5f9fb 0%, #edf6f1 100%);
+  color: var(--brand-text);
+  font-family: Inter, "Segoe UI", sans-serif;
+}
+
+#root {
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+img {
+  max-width: 100%;
+  display: block;
+}
+
+a {
+  transition:
+    color 0.2s ease,
+    opacity 0.2s ease;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+::selection {
+  background: rgba(28, 156, 77, 0.22);
+}
+
+.card-surface {
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid var(--brand-border);
+  box-shadow: var(--brand-shadow);
+  border-radius: 1rem;
+}
+
+.section-accent {
+  background: linear-gradient(
+    135deg,
+    rgba(10, 43, 60, 0.04),
+    rgba(28, 156, 77, 0.08)
+  );
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--brand-navy), var(--brand-green));
+  color: white;
+  border: none;
+  border-radius: 0.75rem;
+  box-shadow: 0 10px 20px rgba(28, 156, 77, 0.18);
+}
+
+.btn-primary:hover {
+  filter: brightness(1.04);
+}
+
+.text-brand {
+  color: var(--brand-navy);
+}
+
+.text-accent {
+  color: var(--brand-green);
+}
+
+.border-brand {
+  border-color: var(--brand-border);
+}
