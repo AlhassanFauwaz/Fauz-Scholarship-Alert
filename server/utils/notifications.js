@@ -62,7 +62,7 @@ export const createNotification = async ({
           notification: notification._id,
           user: userObj._id,
           channel: 'email',
-          provider: 'nodemailer',
+          provider: 'resend',
           status: 'sent',
         });
       } catch (err) {
@@ -71,7 +71,7 @@ export const createNotification = async ({
           notification: notification._id,
           user: userObj._id,
           channel: 'email',
-          provider: 'nodemailer',
+          provider: 'resend',
           status: 'failed',
           errorMessage: err.message,
         });

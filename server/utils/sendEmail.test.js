@@ -3,25 +3,30 @@ import assert from 'node:assert/strict';
 import { getEmailConfig } from './sendEmail.js';
 
 const baseConfig = {
-  EMAIL_HOST: 'smtp.gmail.com',
-  EMAIL_PORT: '587',
-  EMAIL_USER: 'mailer@gmail.com',
-  EMAIL_PASS: 'app-password',
+  RESEND_API_KEY: 're_test_key',
+  EMAIL_FROM: 'Fauz Scholarship Alert <onboarding@resend.dev>',
 };
 
-test('Gmail SMTP uses the authenticated mailbox instead of an unrelated legacy sender', () => {
-  const config = getEmailConfig({ ...baseConfig, FROM_EMAIL: 'noreply@soas.com' });
-
-  assert.equal(config.from, 'mailer@gmail.com');
-  assert.equal(config.replyTo, 'mailer@gmail.com');
-});
-
-test('non-Gmail SMTP keeps an explicitly configured sender address', () => {
+test('reads the Resend API key and sender address', () => {
   const config = getEmailConfig({
     ...baseConfig,
-    EMAIL_HOST: 'smtp.example-mail.com',
-    EMAIL_FROM: 'noreply@soas.com',
+    EMAIL_REPLY_TO: 'support@soas.com',
   });
 
-  assert.equal(config.from, 'noreply@soas.com');
+  assert.equal(config.apiKey, 're_test_key');
+  assert.equal(config.from, 'Fauz Scholarship Alert <onboarding@resend.dev>');
+  assert.equal(config.replyTo, 'support@soas.com');
+});
+
+test('requires the Resend API key and sender address', () => {
+  assert.throws(
+    () => getEmailConfig({}),
+    /RESEND_API_KEY, EMAIL_FROM/
+  );
+});
+
+test('does not require a reply-to address', () => {
+  const config = getEmailConfig(baseConfig);
+
+  assert.equal(config.replyTo, undefined);
 });
