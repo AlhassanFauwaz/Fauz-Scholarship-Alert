@@ -1,17 +1,21 @@
 import nodemailer from 'nodemailer';
 
-const getEnvValue = (...keys) => keys
-  .map((key) => process.env[key]?.trim())
-  .find(Boolean);
+const isGmailSmtp = (host) => /(^|\.)gmail\.com$/i.test(host);
 
-const getEmailConfig = () => {
-  const host = getEnvValue('EMAIL_HOST');
-  const port = Number(getEnvValue('EMAIL_PORT') || 587);
-  const user = getEnvValue('EMAIL_USER');
-  const pass = getEnvValue('EMAIL_PASS');
+export const getEmailConfig = (env = process.env) => {
+  const getValue = (...keys) => keys
+    .map((key) => env[key]?.trim())
+    .find(Boolean);
+
+  const host = getValue('EMAIL_HOST');
+  const port = Number(getValue('EMAIL_PORT') || 587);
+  const user = getValue('EMAIL_USER');
+  const pass = getValue('EMAIL_PASS');
   // FROM_EMAIL is the original project setting; EMAIL_FROM is the Render setting.
-  const from = getEnvValue('EMAIL_FROM', 'FROM_EMAIL') || user;
-  const replyTo = getEnvValue('EMAIL_REPLY_TO', 'REPLY_TO_EMAIL') || from;
+  const configuredFrom = getValue('EMAIL_FROM', 'FROM_EMAIL');
+  const useAuthenticatedSender = isGmailSmtp(host) && configuredFrom && configuredFrom.toLowerCase() !== user?.toLowerCase();
+  const from = useAuthenticatedSender ? user : configuredFrom || user;
+  const replyTo = getValue('EMAIL_REPLY_TO', 'REPLY_TO_EMAIL') || from;
   const missing = [!host && 'EMAIL_HOST', !user && 'EMAIL_USER', !pass && 'EMAIL_PASS'].filter(Boolean);
 
   if (missing.length) {
@@ -20,6 +24,10 @@ const getEmailConfig = () => {
 
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
     throw new Error('EMAIL_PORT must be a valid SMTP port number.');
+  }
+
+  if (useAuthenticatedSender) {
+    console.warn('Ignoring EMAIL_FROM/FROM_EMAIL because Gmail SMTP can only send from the authenticated mailbox or a configured Gmail alias.');
   }
 
   return { host, port, user, pass, from, replyTo };
