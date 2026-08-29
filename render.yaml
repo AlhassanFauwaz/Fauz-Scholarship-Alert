@@ -16,7 +16,7 @@ services:
       - key: JWT_EXPIRE
         value: 7d
       - key: CLIENT_URL
-        sync: false
+        value: https://fauz-scholarship-alert-1-ghxp.onrender.com
       - key: EMAIL_HOST
         sync: false
       - key: EMAIL_PORT

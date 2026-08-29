@@ -20,9 +20,10 @@ const hashVerificationCode = (code) =>
 const sendVerificationEmail = async (user, code) => {
   await sendEmail({
     to: user.email,
-    subject: 'Your SOAS verification code',
-    html: `<h2>Welcome to SOAS, ${user.fullName}!</h2><p>Your six-digit verification code is:</p><p style="font-size:28px;font-weight:bold;letter-spacing:6px">${code}</p><p>This code expires in 24 hours.</p>`,
-    text: `Welcome to SOAS, ${user.fullName}! Your verification code is ${code}. It expires in 24 hours.`,
+    subject: 'Verify your Fauz Scholarship Alert account',
+    preheader: `Your verification code is ${code}. It expires in 24 hours.`,
+    html: `<h1 style="margin:0 0 12px;font-size:27px;line-height:1.25;color:#0a2b3c;">Welcome, ${user.fullName}!</h1><p style="margin:0 0 24px;">You are one quick step away from discovering opportunities tailored for you. Enter this verification code in the app:</p><div style="margin:0 0 24px;padding:18px;border-radius:12px;background:#edf9f1;text-align:center;font-size:30px;font-weight:800;letter-spacing:8px;color:#0a2b3c;">${code}</div><p style="margin:0;">This code expires in <strong>24 hours</strong>. If you did not create an account, you can safely ignore this email.</p>`,
+    text: `Welcome, ${user.fullName}! Your Fauz Scholarship Alert verification code is ${code}. It expires in 24 hours.`,
   });
 };
 

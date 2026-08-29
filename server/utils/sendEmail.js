@@ -1,12 +1,25 @@
 import nodemailer from 'nodemailer';
 
+const brandEmail = ({ content, preheader = 'Updates from Fauz Scholarship Alert' }) => `
+  <!doctype html><html lang="en"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><meta name="x-apple-disable-message-reformatting" /><title>Fauz Scholarship Alert</title></head>
+  <body style="margin:0;padding:0;background:#f3f7f5;color:#18352a;font-family:Arial,Helvetica,sans-serif;">
+    <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">${preheader}</div>
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f3f7f5;padding:32px 16px;"><tr><td align="center">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px;background:#ffffff;border-radius:20px;overflow:hidden;box-shadow:0 10px 30px rgba(17,54,38,.10);">
+        <tr><td style="padding:28px 36px;background:#0a2b3c;color:#ffffff;"><div style="font-size:13px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;color:#bff4d0;">Fauz Scholarship Alert</div><div style="margin-top:8px;font-size:25px;font-weight:800;line-height:1.2;">Opportunities made clearer</div></td></tr>
+        <tr><td style="padding:34px 36px;font-size:16px;line-height:1.65;color:#385149;">${content}</td></tr>
+        <tr><td style="padding:20px 36px;border-top:1px solid #e6eee9;font-size:12px;line-height:1.55;color:#6b7e76;">You received this email because you have a Fauz Scholarship Alert account.<br />Please do not reply directly to this automated message.</td></tr>
+      </table>
+    </td></tr></table>
+  </body></html>`;
+
 const sendEmail = async (options) => {
   console.log('📧 EMAIL ENV VARS:', {
     host: process.env.EMAIL_HOST,
     port: process.env.EMAIL_PORT,
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS ? '(hidden)' : 'MISSING',
-    from: process.env.FROM_EMAIL,
+    from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
   });
 
   const transporter = nodemailer.createTransport({
@@ -25,11 +38,11 @@ const sendEmail = async (options) => {
   const fromEmail = process.env.EMAIL_FROM || process.env.EMAIL_USER;
 
   const mailOptions = {
-    from: `"SOAS" <${fromEmail}>`,
+    from: `"Fauz Scholarship Alert" <${fromEmail}>`,
     to: options.to,
     subject: options.subject,
-    html: options.html,
-    text: options.text,
+    html: brandEmail({ content: options.html, preheader: options.preheader }),
+    text: options.text || 'You have a new update from Fauz Scholarship Alert.',
     replyTo: process.env.EMAIL_REPLY_TO || fromEmail,
   };
 

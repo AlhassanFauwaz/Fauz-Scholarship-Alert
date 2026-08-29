@@ -3,6 +3,7 @@ import NotificationLog from '../models/NotificationLog.js';
 import User from '../models/User.js';
 import sendEmail from './sendEmail.js';
 import sendSMS from './sendSMS.js';
+import { clientUrl } from '../config/clientUrl.js';
 
 /**
  * Create an in-app notification and optionally send an explicitly requested
@@ -50,7 +51,8 @@ export const createNotification = async ({
         await sendEmail({
           to: userObj.email,
           subject: title,
-          html: `<p>${message}</p>${opportunity ? `<p><a href="${process.env.CLIENT_URL}/opportunity/${opportunity}">View Opportunity</a></p>` : ''}`,
+          html: `<h1 style="margin:0 0 12px;font-size:25px;color:#0a2b3c;">${title}</h1><p style="margin:0 0 22px;">${message}</p>${opportunity ? `<a href="${clientUrl}/opportunity/${opportunity}" style="display:inline-block;padding:12px 18px;border-radius:8px;background:#1c9c4d;color:#ffffff;font-weight:700;text-decoration:none;">View opportunity</a>` : ''}`,
+          text: `${message}${opportunity ? ` View opportunity: ${clientUrl}/opportunity/${opportunity}` : ''}`,
         });
         await NotificationLog.create({
           notification: notification._id,
