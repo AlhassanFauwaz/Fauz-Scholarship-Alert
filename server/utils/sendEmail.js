@@ -1,5 +1,30 @@
 import nodemailer from 'nodemailer';
 
+const getEnvValue = (...keys) => keys
+  .map((key) => process.env[key]?.trim())
+  .find(Boolean);
+
+const getEmailConfig = () => {
+  const host = getEnvValue('EMAIL_HOST');
+  const port = Number(getEnvValue('EMAIL_PORT') || 587);
+  const user = getEnvValue('EMAIL_USER');
+  const pass = getEnvValue('EMAIL_PASS');
+  // FROM_EMAIL is the original project setting; EMAIL_FROM is the Render setting.
+  const from = getEnvValue('EMAIL_FROM', 'FROM_EMAIL') || user;
+  const replyTo = getEnvValue('EMAIL_REPLY_TO', 'REPLY_TO_EMAIL') || from;
+  const missing = [!host && 'EMAIL_HOST', !user && 'EMAIL_USER', !pass && 'EMAIL_PASS'].filter(Boolean);
+
+  if (missing.length) {
+    throw new Error(`Email is not configured. Set ${missing.join(', ')} in the deployment environment.`);
+  }
+
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error('EMAIL_PORT must be a valid SMTP port number.');
+  }
+
+  return { host, port, user, pass, from, replyTo };
+};
+
 const brandEmail = ({ content, preheader = 'Updates from Fauz Scholarship Alert' }) => `
   <!doctype html><html lang="en"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><meta name="x-apple-disable-message-reformatting" /><title>Fauz Scholarship Alert</title></head>
   <body style="margin:0;padding:0;background:#f3f7f5;color:#18352a;font-family:Arial,Helvetica,sans-serif;">
@@ -14,28 +39,25 @@ const brandEmail = ({ content, preheader = 'Updates from Fauz Scholarship Alert'
   </body></html>`;
 
 const sendEmail = async (options) => {
-  console.log('📧 EMAIL ENV VARS:', {
-    host: process.env.EMAIL_HOST,
-    port: process.env.EMAIL_PORT,
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS ? '(hidden)' : 'MISSING',
-    from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
-  });
+  const { host, port, user, pass, from, replyTo } = getEmailConfig();
 
   const transporter = nodemailer.createTransport({
-    host: process.env.EMAIL_HOST,
-    port: Number(process.env.EMAIL_PORT),
-    secure: Number(process.env.EMAIL_PORT) === 465,
-    requireTLS: Number(process.env.EMAIL_PORT) === 587,
+    host,
+    port,
+    secure: port === 465,
+    requireTLS: port === 587,
     auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS,
+      user,
+      pass,
     },
+    connectionTimeout: 15_000,
+    greetingTimeout: 15_000,
+    socketTimeout: 30_000,
   });
 
   // Gmail SMTP should send from its authenticated mailbox. An unrelated
   // From domain often fails DMARC alignment and is routed to spam.
-  const fromEmail = process.env.EMAIL_FROM || process.env.EMAIL_USER;
+  const fromEmail = from;
 
   const mailOptions = {
     from: `"Fauz Scholarship Alert" <${fromEmail}>`,
@@ -43,10 +65,16 @@ const sendEmail = async (options) => {
     subject: options.subject,
     html: brandEmail({ content: options.html, preheader: options.preheader }),
     text: options.text || 'You have a new update from Fauz Scholarship Alert.',
-    replyTo: process.env.EMAIL_REPLY_TO || fromEmail,
+    replyTo,
   };
 
-  const info = await transporter.sendMail(mailOptions);
+  let info;
+  try {
+    info = await transporter.sendMail(mailOptions);
+  } catch (error) {
+    console.error(`Email delivery failed for ${options.to}:`, error.code || error.message);
+    throw new Error(`Email delivery failed: ${error.message}`, { cause: error });
+  }
   if (!info.accepted?.length) {
     throw new Error('The email provider did not accept the recipient address.');
   }
