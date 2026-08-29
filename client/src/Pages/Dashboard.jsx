@@ -14,19 +14,32 @@ export default function Dashboard() {
   useEffect(() => {
     const loadDashboardData = async () => {
       try {
-        const [recRes, savedRes, notifRes] = await Promise.all([
+        const [recResult, savedResult, notifResult] = await Promise.allSettled([
           API.get("/matching/recommendations"),
           API.get("/saved-opportunities"),
           API.get("/notifications"),
         ]);
 
-        setRecommendations(recRes.data.recommendations || []);
-        setSavedCount(savedRes.data.saved?.length || 0);
+        if (recResult.status === "fulfilled") {
+          setRecommendations(recResult.value.data.recommendations || []);
+        } else {
+          console.error("Could not load recommendations:", recResult.reason);
+        }
 
-        const unread = (notifRes.data.notifications || []).filter(
-          (n) => !n.read,
-        ).length;
-        setNotifCount(unread);
+        if (savedResult.status === "fulfilled") {
+          setSavedCount(savedResult.value.data.saved?.length || 0);
+        } else {
+          console.error("Could not load saved opportunities:", savedResult.reason);
+        }
+
+        if (notifResult.status === "fulfilled") {
+          const unread = (notifResult.value.data.notifications || []).filter(
+            (n) => !n.read,
+          ).length;
+          setNotifCount(unread);
+        } else {
+          console.error("Could not load notifications:", notifResult.reason);
+        }
       } catch (err) {
         console.error(err);
       } finally {

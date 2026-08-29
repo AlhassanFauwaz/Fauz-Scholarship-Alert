@@ -9,17 +9,16 @@ export const getRecommendations = async (req, res) => {
   try {
     const user = await User.findById(req.user.id);
 
-    if (!user.profile || !user.profile.educationLevel) {
-      return res.status(400).json({
-        message: 'Please complete your profile (at least education level) to get recommendations.',
-      });
-    }
-
-    // Get all published opportunities that haven't expired
+    // Get all published opportunities that haven't expired. New users should
+    // still see useful opportunities while they complete their profile.
     const opportunities = await Opportunity.find({
       status: 'published',
       deadline: { $gt: new Date() },
-    });
+    }).sort({ deadline: 1 });
+
+    if (!user.profile?.educationLevel) {
+      return res.json({ recommendations: opportunities.slice(0, 6) });
+    }
 
     // Score each one
     const scored = opportunities
@@ -31,7 +30,9 @@ export const getRecommendations = async (req, res) => {
       .sort((a, b) => b.matchScore - a.matchScore)
       .slice(0, 20); // top 20
 
-    res.json({ recommendations: scored });
+    // A partial profile can produce no 40%+ matches. Fall back to current
+    // opportunities so the dashboard is never an empty dead end.
+    res.json({ recommendations: scored.length ? scored : opportunities.slice(0, 6) });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error' });
