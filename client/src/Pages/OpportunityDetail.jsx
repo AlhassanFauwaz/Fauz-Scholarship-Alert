@@ -2,7 +2,6 @@ import { useState, useEffect, useContext } from "react";
 import { useParams, Link } from "react-router-dom";
 import API from "../services/api";
 import { AuthContext } from "../Context/AuthContext";
-import fallbackImage from "../assets/soas.jpg";
 
 const fundingLabels = {
   fully_funded: "Fully Funded",
@@ -23,6 +22,10 @@ export default function OpportunityDetail() {
   const [saved, setSaved] = useState(false);
   const [matchData, setMatchData] = useState(null);
   const [copied, setCopied] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportReason, setReportReason] = useState("broken_link");
+  const [reportDetails, setReportDetails] = useState("");
+  const [reportSent, setReportSent] = useState(false);
 
   useEffect(() => {
     fetchOpportunity();
@@ -35,7 +38,6 @@ export default function OpportunityDetail() {
       setOpportunity(opp);
 
       if (user) {
-        // Fetch saved status and match data
         const [savedRes, recRes] = await Promise.allSettled([
           API.get("/saved-opportunities"),
           API.get("/matching/recommendations"),
@@ -101,6 +103,25 @@ export default function OpportunityDetail() {
     setTimeout(() => setCopied(false), 3000);
   };
 
+  const handleReportSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await API.post("/reports", {
+        opportunityId: opportunity._id,
+        reason: reportReason,
+        details: reportDetails,
+      });
+      setReportSent(true);
+      setTimeout(() => {
+        setReportSent(false);
+        setShowReportModal(false);
+        setReportDetails("");
+      }, 2500);
+    } catch (err) {
+      alert(err.response?.data?.message || "Failed to submit report");
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex h-64 items-center justify-center">
@@ -132,6 +153,7 @@ export default function OpportunityDetail() {
 
   const isVerified =
     opportunity.verificationStatus === "verified" ||
+    opportunity.verificationStatus === "official" ||
     opportunity.verificationStatus === "official_source";
 
   return (
@@ -153,7 +175,7 @@ export default function OpportunityDetail() {
 
             {isVerified && (
               <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500 px-3 py-1 text-xs font-bold text-white shadow-sm">
-                ✓ Verified Official Opportunity
+                ✓ Verified Authentic Opportunity
               </span>
             )}
           </div>
@@ -171,7 +193,7 @@ export default function OpportunityDetail() {
         </div>
 
         <div className="p-6 md:p-10 space-y-8">
-          {/* Recommendation Match Score Box (If Logged In and Available) */}
+          {/* Recommendation Match Score Box */}
           {matchData && (
             <div className="rounded-2xl border border-emerald-300 bg-emerald-50/80 p-5 shadow-sm">
               <div className="flex items-center justify-between">
@@ -205,7 +227,7 @@ export default function OpportunityDetail() {
             </div>
           )}
 
-          {/* Key Quick Facts Grid */}
+          {/* Key Facts Grid */}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
               <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500">
@@ -275,7 +297,7 @@ export default function OpportunityDetail() {
             </p>
           </div>
 
-          {/* Benefits / Funding Breakdown */}
+          {/* Benefits */}
           {opportunity.benefits && (
             <div className="border-t border-slate-100 pt-6">
               <h3 className="mb-3 flex items-center gap-2 text-xl font-black text-[#0a2b3c]">
@@ -313,31 +335,32 @@ export default function OpportunityDetail() {
                   {opportunity.skills.join(", ")}
                 </li>
               )}
-              {opportunity.eligibility?.gender && (
-                <li>
-                  • <span className="font-semibold text-slate-800">Gender Eligibility:</span>{" "}
-                  <span className="capitalize">{opportunity.eligibility.gender}</span>
-                </li>
-              )}
-              {opportunity.eligibility?.other && (
-                <li>
-                  • <span className="font-semibold text-slate-800">Additional Criteria:</span>{" "}
-                  {opportunity.eligibility.other}
-                </li>
-              )}
             </ul>
           </div>
 
-          {/* Official Website vs Info Source Notice */}
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-600">
-            <p className="font-bold text-slate-800">🛡️ Verified Source Integrity</p>
-            <p className="mt-1">
-              Fauz Opportunity Alert does not process applications or collect personal submission documents. Always apply directly on the official host organization's website.
+          {/* Source Attribution & Integrity Notice */}
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-600 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-slate-800">🛡️ Verified Source Integrity</span>
+              <button
+                onClick={() => setShowReportModal(true)}
+                className="font-bold text-red-600 hover:underline"
+              >
+                Report an Issue ↗
+              </button>
+            </div>
+            <p>
+              Fauz Opportunity Platform indexes legitimate opportunities directly from official institutions and verified partners.
             </p>
-            {opportunity.sourceName && (
-              <p className="mt-2 text-[11px] text-slate-500">
-                Information gathered from: <span className="font-semibold">{opportunity.sourceName}</span>
-              </p>
+            {opportunity.sourceReferences?.length > 0 && (
+              <div className="pt-1 border-t border-slate-200/60">
+                <span className="font-semibold text-slate-700">Source Citations: </span>
+                {opportunity.sourceReferences.map((src, i) => (
+                  <span key={i} className="inline-block mr-2 text-[11px] text-slate-500">
+                    [{src.name || src.domain || `Source ${i + 1}`}]
+                  </span>
+                ))}
+              </div>
             )}
           </div>
 
@@ -348,10 +371,21 @@ export default function OpportunityDetail() {
               target="_blank"
               rel="noopener noreferrer"
               onClick={handleApplyClick}
-              className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#0a2b3c] to-[#1c9c4d] px-6 py-3.5 text-sm font-bold text-white shadow-[0_12px_25px_rgba(28,156,77,0.28)] transition hover:brightness-110"
+              className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#0a2b3c] to-[#1c9c4d] px-6 py-3.5 text-sm font-bold text-white shadow-lg transition hover:brightness-110"
             >
               Apply on Official Website ↗
             </a>
+
+            {opportunity.officialWebsite && opportunity.officialWebsite !== opportunity.applicationUrl && (
+              <a
+                href={opportunity.officialWebsite}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-xl border border-slate-300 bg-white px-5 py-3.5 text-sm font-bold text-[#0a2b3c] hover:bg-slate-50"
+              >
+                Official Host Website ↗
+              </a>
+            )}
 
             {user && (
               <button
@@ -375,6 +409,70 @@ export default function OpportunityDetail() {
           </div>
         </div>
       </div>
+
+      {/* Report Issue Modal */}
+      {showReportModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h2 className="text-base font-black text-[#0a2b3c]">Report an Opportunity Issue</h2>
+              <button onClick={() => setShowReportModal(false)} className="text-slate-400 font-bold">✕</button>
+            </div>
+
+            {reportSent ? (
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-center text-xs font-bold text-emerald-800">
+                ✓ Report submitted. Our moderation team has been notified.
+              </div>
+            ) : (
+              <form onSubmit={handleReportSubmit} className="space-y-4 text-xs">
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Issue Category *</label>
+                  <select
+                    value={reportReason}
+                    onChange={(e) => setReportReason(e.target.value)}
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 outline-none focus:border-emerald-500"
+                  >
+                    <option value="broken_link">Broken / Unreachable Application Link</option>
+                    <option value="expired">Deadline Passed / Closed Early</option>
+                    <option value="wrong_deadline">Incorrect Deadline Date</option>
+                    <option value="wrong_eligibility">Inaccurate Eligibility Criteria</option>
+                    <option value="fake_suspicious">Suspicious / Potential Scam</option>
+                    <option value="duplicate">Duplicate of Another Opportunity</option>
+                    <option value="other">Other Issue</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Details / Notes (Optional)</label>
+                  <textarea
+                    rows={3}
+                    placeholder="Provide additional details to help our moderation team..."
+                    value={reportDetails}
+                    onChange={(e) => setReportDetails(e.target.value)}
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 outline-none focus:border-emerald-500"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowReportModal(false)}
+                    className="rounded-xl border border-slate-200 px-4 py-2 font-bold text-slate-600"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="rounded-xl bg-red-600 px-4 py-2 font-bold text-white shadow"
+                  >
+                    Submit Report
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

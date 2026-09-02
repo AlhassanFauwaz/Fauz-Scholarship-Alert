@@ -33,7 +33,7 @@ export default function VerificationQueue() {
     try {
       await API.put(`/admin/opportunities/${id}/verify`, {
         verificationStatus: status,
-        autoPublish: status === "verified",
+        autoPublish: status === "verified" || status === "official",
       });
       setMessage(`Opportunity successfully marked as ${status}!`);
       setOpportunities((prev) => prev.filter((o) => o._id !== id));
@@ -63,17 +63,30 @@ export default function VerificationQueue() {
     }
   };
 
+  const getRiskBadge = (riskLevel) => {
+    switch (riskLevel) {
+      case "critical":
+        return <span className="rounded-full bg-red-100 px-2.5 py-0.5 text-[10px] font-bold text-red-800">🚨 Critical Risk</span>;
+      case "high":
+        return <span className="rounded-full bg-rose-100 px-2.5 py-0.5 text-[10px] font-bold text-rose-800">⚠️ High Risk</span>;
+      case "medium":
+        return <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-[10px] font-bold text-amber-800">🟡 Medium Risk</span>;
+      default:
+        return <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-bold text-emerald-800">🟢 Low Risk</span>;
+    }
+  };
+
   return (
     <div className="space-y-6 p-1">
       <div>
         <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#1c9c4d]">
-          Moderation & Trust
+          Authenticity & Verification Engine
         </p>
         <h1 className="mt-1 text-3xl font-black text-[#0a2b3c]">
           Opportunity Verification Queue
         </h1>
         <p className="mt-1 text-xs text-slate-500">
-          Review newly discovered opportunities, evaluate quality and trust scores, or merge duplicate citations.
+          Review newly discovered opportunities, evaluate automated risk scores and source authority, or merge duplicate citations.
         </p>
       </div>
 
@@ -118,6 +131,7 @@ export default function VerificationQueue() {
                     <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold text-emerald-800">
                       Quality: {opp.qualityScore || 75}/100
                     </span>
+                    {getRiskBadge(opp.riskLevel || "low")}
                     {opp.sourceName && (
                       <span className="text-[11px] text-slate-400">
                         Source: <span className="font-semibold text-slate-600">{opp.sourceName}</span>

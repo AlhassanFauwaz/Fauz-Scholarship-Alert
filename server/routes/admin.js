@@ -3,8 +3,10 @@ import {
   getDashboardStats,
   getAdminOpportunities,
   verifyOpportunity,
+  overrideOpportunity,
   mergeOpportunities,
   getIngestions,
+  getAuditLogs,
   getAdminUsers,
   getAdminUser,
   updateAdminUser,
@@ -22,13 +24,15 @@ router.use(protect, admin);
 // Dashboard
 router.get('/dashboard', getDashboardStats);
 
-// Opportunities
+// Opportunities Management & Moderation
 router.get('/opportunities', getAdminOpportunities);
 router.put('/opportunities/:id/verify', verifyOpportunity);
+router.put('/opportunities/:id/override', overrideOpportunity);
 router.post('/opportunities/:id/merge', mergeOpportunities);
 
-// Raw Ingestion Auditing
+// Raw Ingestion Auditing & Audit Trail
 router.get('/ingestions', getIngestions);
+router.get('/audit-logs', getAuditLogs);
 
 // Users
 router.get('/users', getAdminUsers);

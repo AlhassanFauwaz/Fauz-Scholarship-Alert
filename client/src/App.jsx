@@ -28,6 +28,7 @@ import OpportunityForm from "./Pages/admin/OpportunityForm";
 import VerificationQueue from "./Pages/admin/VerificationQueue";
 import AdminSources from "./Pages/admin/Sources";
 import AdminIngestions from "./Pages/admin/Ingestions";
+import AdminAuditLogs from "./Pages/admin/AuditLogs";
 import AdminUsers from "./Pages/admin/users";
 import AdminFeedback from "./Pages/admin/Feedback";
 import AdminReports from "./Pages/admin/Reports";
@@ -117,6 +118,7 @@ function App() {
                 <Route path="verification" element={<VerificationQueue />} />
                 <Route path="sources" element={<AdminSources />} />
                 <Route path="ingestions" element={<AdminIngestions />} />
+                <Route path="audit-logs" element={<AdminAuditLogs />} />
                 <Route
                   path="opportunities/create"
                   element={<OpportunityForm />}

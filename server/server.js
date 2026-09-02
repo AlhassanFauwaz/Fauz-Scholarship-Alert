@@ -15,11 +15,14 @@ import savedOpportunityRoutes from "./routes/savedOpportunities.js";
 import notificationRoutes from "./routes/notifications.js";
 import adminRoutes from "./routes/admin.js";
 import discoveryRoutes from "./routes/discovery.js";
+import reportRoutes from "./routes/reports.js";
 import feedbackRoutes from "./routes/feedback.js";
 import subscriptionRoutes from "./routes/subscriptions.js";
 import { startDeadlineScheduler } from "./jobs/deadlineScheduler.js";
 import { initCollectorScheduler } from "./jobs/collectorScheduler.js";
 import { initDiscoveryScheduler } from "./jobs/discoveryScheduler.js";
+import { initRecheckScheduler } from "./jobs/recheckScheduler.js";
+import { startDiscoveryWorker } from "./workers/discoveryWorker.js";
 import { seedInitialSources } from "./services/collectorService.js";
 
 const app = express();
@@ -64,6 +67,7 @@ app.use("/api/saved-opportunities", savedOpportunityRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/discovery", discoveryRoutes);
+app.use("/api/reports", reportRoutes);
 app.use("/api/feedback", feedbackRoutes);
 app.use("/api/subscriptions", subscriptionRoutes);
 
@@ -81,6 +85,8 @@ const startServer = async () => {
     startDeadlineScheduler();
     initCollectorScheduler();
     initDiscoveryScheduler();
+    initRecheckScheduler();
+    startDiscoveryWorker();
 
     app.listen(PORT, "0.0.0.0", () => {
       console.log(`Global Opportunity Platform API running on port ${PORT}`);

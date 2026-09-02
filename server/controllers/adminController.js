@@ -2,11 +2,12 @@ import User from '../models/User.js';
 import Opportunity from '../models/Opportunity.js';
 import OpportunitySource from '../models/OpportunitySource.js';
 import OpportunityIngestion from '../models/OpportunityIngestion.js';
+import AuditLog from '../models/AuditLog.js';
 import Notification from '../models/Notification.js';
 import Subscription from '../models/Subscription.js';
 import SavedOpportunity from '../models/SavedOpportunity.js';
 import Feedback from '../models/Feedback.js';
-import { mergeOpportunityIntoMaster } from '../services/duplicateService.js';
+import { mergeIntoMasterRecord } from '../services/OpportunityDeduplicationEngine.js';
 
 // @desc    Get comprehensive admin dashboard stats
 // @route   GET /api/admin/dashboard
@@ -48,8 +49,8 @@ export const getDashboardStats = async (req, res) => {
       Opportunity.countDocuments({ status: 'published' }),
       Opportunity.countDocuments({ status: 'draft' }),
       Opportunity.countDocuments({ status: 'expired' }),
-      Opportunity.countDocuments({ verificationStatus: 'pending' }),
-      Opportunity.countDocuments({ verificationStatus: { $in: ['verified', 'official_source'] } }),
+      Opportunity.countDocuments({ verificationStatus: { $in: ['pending', 'validated', 'discovered'] } }),
+      Opportunity.countDocuments({ verificationStatus: { $in: ['verified', 'official_source', 'official'] } }),
       Opportunity.countDocuments({ createdAt: { $gte: today } }),
       Opportunity.countDocuments({ type: 'scholarship' }),
       Opportunity.countDocuments({ type: 'internship' }),
@@ -147,11 +148,12 @@ export const verifyOpportunity = async (req, res) => {
     const opportunity = await Opportunity.findById(req.params.id);
     if (!opportunity) return res.status(404).json({ message: 'Opportunity not found' });
 
+    const prevStatus = opportunity.verificationStatus;
     if (verificationStatus) {
       opportunity.verificationStatus = verificationStatus;
       opportunity.verifiedBy = req.user.id;
       opportunity.verifiedAt = new Date();
-      if (verificationStatus === 'verified' && autoPublish) {
+      if ((verificationStatus === 'verified' || verificationStatus === 'official') && autoPublish) {
         opportunity.status = 'published';
       }
     }
@@ -160,9 +162,51 @@ export const verifyOpportunity = async (req, res) => {
     }
 
     await opportunity.save();
+
+    await AuditLog.create({
+      action: 'opportunity_verification_override',
+      category: 'verification',
+      targetType: 'Opportunity',
+      targetId: opportunity._id,
+      performedBy: req.user.id,
+      performerRole: req.user.role || 'admin',
+      details: `Admin changed verification status from "${prevStatus}" to "${verificationStatus}". Notes: ${verificationNotes || 'None'}`,
+    });
+
     res.json({ opportunity });
   } catch (error) {
     console.error('verifyOpportunity error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// @desc    Admin override of any opportunity fields
+// @route   PUT /api/admin/opportunities/:id/override
+// @access  Private/Admin
+export const overrideOpportunity = async (req, res) => {
+  try {
+    const opportunity = await Opportunity.findById(req.params.id);
+    if (!opportunity) return res.status(404).json({ message: 'Opportunity not found' });
+
+    const prevSnapshot = opportunity.toObject();
+    Object.assign(opportunity, req.body);
+    await opportunity.save();
+
+    await AuditLog.create({
+      action: 'admin_opportunity_field_override',
+      category: 'opportunity_override',
+      targetType: 'Opportunity',
+      targetId: opportunity._id,
+      performedBy: req.user.id,
+      performerRole: req.user.role || 'admin',
+      details: `Admin updated fields: ${Object.keys(req.body).join(', ')}`,
+      previousState: prevSnapshot,
+      newState: opportunity.toObject(),
+    });
+
+    res.json({ message: 'Opportunity updated successfully', opportunity });
+  } catch (error) {
+    console.error('overrideOpportunity error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -180,12 +224,21 @@ export const mergeOpportunities = async (req, res) => {
       return res.status(404).json({ message: 'One or both opportunities not found' });
     }
 
-    await mergeOpportunityIntoMaster(masterOpp, duplicateOpp);
-    // Mark duplicate as archived/merged
+    await mergeIntoMasterRecord(masterOpp, duplicateOpp);
     duplicateOpp.status = 'archived';
     duplicateOpp.verificationStatus = 'rejected';
     duplicateOpp.verificationNotes = `Merged into master opportunity: ${masterOpp._id}`;
     await duplicateOpp.save();
+
+    await AuditLog.create({
+      action: 'admin_manual_duplicate_merge',
+      category: 'duplicate_merge',
+      targetType: 'Opportunity',
+      targetId: masterOpp._id,
+      performedBy: req.user.id,
+      performerRole: req.user.role || 'admin',
+      details: `Merged duplicate opportunity "${duplicateOpp.title}" (${duplicateOpp._id}) into master record "${masterOpp.title}" (${masterOpp._id}).`,
+    });
 
     res.json({ message: 'Opportunities merged successfully', masterOpportunity: masterOpp });
   } catch (error) {
@@ -222,6 +275,37 @@ export const getIngestions = async (req, res) => {
     });
   } catch (error) {
     console.error('getIngestions error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// @desc    Get Audit Logs
+// @route   GET /api/admin/audit-logs
+// @access  Private/Admin
+export const getAuditLogs = async (req, res) => {
+  try {
+    const { category, page = 1, limit = 40 } = req.query;
+    const filter = {};
+    if (category) filter.category = category;
+
+    const skip = (Number(page) - 1) * Number(limit);
+    const [logs, total] = await Promise.all([
+      AuditLog.find(filter)
+        .sort({ timestamp: -1 })
+        .skip(skip)
+        .limit(Number(limit))
+        .populate('performedBy', 'fullName email role'),
+      AuditLog.countDocuments(filter),
+    ]);
+
+    res.json({
+      logs,
+      total,
+      page: Number(page),
+      totalPages: Math.ceil(total / Number(limit)),
+    });
+  } catch (error) {
+    console.error('getAuditLogs error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };

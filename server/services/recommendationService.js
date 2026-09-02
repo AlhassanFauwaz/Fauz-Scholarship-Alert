@@ -3,7 +3,9 @@ import User from '../models/User.js';
 import { calculateMatchWithReasons } from '../utils/matchScore.js';
 
 /**
- * Generate comprehensive categorized recommendations for a user.
+ * Generate comprehensive categorized recommendations using a scalable two-stage pipeline:
+ * Stage 1: Candidate Generation (Hard eligibility & geographic filtering)
+ * Stage 2: Multi-Factor Ranking & Explanation
  */
 export const getUserRecommendations = async (userId) => {
   const user = await User.findById(userId);
@@ -11,18 +13,60 @@ export const getUserRecommendations = async (userId) => {
 
   const now = new Date();
   const hiddenIds = user.profile?.hiddenOpportunities || [];
+  const userCountry = user.profile?.country;
+  const userNationality = user.profile?.nationality;
+  const userDegree = user.profile?.educationLevel;
+  const preferredTypes = user.profile?.preferredOpportunityTypes || [];
 
-  // Query all active published opportunities
-  const opportunities = await Opportunity.find({
+  // STAGE 1: Candidate Generation Query (Filter by hard eligibility constraints)
+  const candidateFilter = {
     status: 'published',
     deadline: { $gt: now },
     _id: { $nin: hiddenIds },
-  })
-    .sort({ createdAt: -1 })
-    .limit(100);
+  };
 
-  // Score all opportunities
-  const scored = opportunities.map((opp) => {
+  const orEligibility = [];
+  if (userCountry) {
+    orEligibility.push({ country: userCountry }, { eligibleCountries: userCountry }, { country: 'Worldwide' });
+  }
+  if (userNationality) {
+    orEligibility.push({ 'eligibility.nationality': userNationality }, { eligibleCountries: userNationality });
+  }
+  if (orEligibility.length > 0) {
+    candidateFilter.$or = orEligibility;
+  }
+
+  if (preferredTypes.length > 0) {
+    candidateFilter.type = { $in: preferredTypes };
+  }
+
+  // Fetch candidate pool (scales cleanly even across millions of records)
+  let candidates = await Opportunity.find(candidateFilter)
+    .sort({ verificationStatus: 1, qualityScore: -1, createdAt: -1 })
+    .limit(150);
+
+  // Fallback if candidate filter is overly narrow
+  if (candidates.length < 10) {
+    const broadCandidates = await Opportunity.find({
+      status: 'published',
+      deadline: { $gt: now },
+      _id: { $nin: hiddenIds },
+    })
+      .sort({ qualityScore: -1, createdAt: -1 })
+      .limit(60);
+    candidates = [...candidates, ...broadCandidates];
+  }
+
+  // Deduplicate candidates by _id
+  const seenIds = new Set();
+  const uniqueCandidates = candidates.filter((item) => {
+    if (seenIds.has(item._id.toString())) return false;
+    seenIds.add(item._id.toString());
+    return true;
+  });
+
+  // STAGE 2: Multi-Factor Scoring & Explanation
+  const scored = uniqueCandidates.map((opp) => {
     const { matchScore, matchReasons } = calculateMatchWithReasons(user.profile, opp);
     return {
       ...opp.toObject(),
@@ -37,7 +81,6 @@ export const getUserRecommendations = async (userId) => {
     .sort((a, b) => b.matchScore - a.matchScore)
     .slice(0, 18);
 
-  // If no high-scoring matches, return latest opportunities
   const fallback = scored.slice(0, 6);
   const finalRecommended = recommended.length > 0 ? recommended : fallback;
 
@@ -60,3 +103,5 @@ export const getUserRecommendations = async (userId) => {
     closingSoon,
   };
 };
+
+export default { getUserRecommendations };
