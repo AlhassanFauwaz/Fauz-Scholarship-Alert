@@ -35,3 +35,17 @@ services:
         sync: false
       - key: SMS_SENDER_ID
         sync: false
+
+  - type: web
+    name: fauz-scholarship-alert
+    runtime: static
+    rootDir: client
+    buildCommand: pnpm install --frozen-lockfile && pnpm build
+    staticPublishPath: dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_URL
+        value: https://fauz-scholarship-alert-1.onrender.com/api
