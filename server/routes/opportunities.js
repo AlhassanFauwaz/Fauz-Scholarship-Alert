@@ -7,6 +7,7 @@ import {
   getOpportunity,
   updateOpportunity,
   deleteOpportunity,
+  trackOpportunityClick,
 } from '../controllers/opportunityController.js';
 import { saveOpportunity, unsaveOpportunity } from '../controllers/savedOpportunityController.js';
 
@@ -14,7 +15,8 @@ const router = express.Router();
 
 // ---------- PUBLIC ROUTES ----------
 router.get('/', getOpportunities);
-router.get('/:id', getOpportunity);   // must come after more specific parameterised routes
+router.post('/:id/click', trackOpportunityClick);
+router.get('/:id', getOpportunity); // must come after more specific parameterised routes
 
 // ---------- USER PROTECTED ROUTES (Save/Unsave) ----------
 router.post('/:id/save', protect, saveOpportunity);

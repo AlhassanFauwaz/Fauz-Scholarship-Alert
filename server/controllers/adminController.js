@@ -1,46 +1,104 @@
 import User from '../models/User.js';
 import Opportunity from '../models/Opportunity.js';
+import OpportunitySource from '../models/OpportunitySource.js';
 import Notification from '../models/Notification.js';
 import Subscription from '../models/Subscription.js';
 import SavedOpportunity from '../models/SavedOpportunity.js';
 import Feedback from '../models/Feedback.js';
 
-// @desc    Get admin dashboard stats
+// @desc    Get comprehensive admin dashboard stats
 // @route   GET /api/admin/dashboard
 // @access  Private/Admin
 export const getDashboardStats = async (req, res) => {
   try {
-    const totalUsers = await User.countDocuments();
-    const activeUsers = await User.countDocuments({ accountStatus: 'active' });
-    const verifiedUsers = await User.countDocuments({ emailVerified: true });
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
-    const totalOpportunities = await Opportunity.countDocuments();
-    const publishedOpportunities = await Opportunity.countDocuments({ status: 'published' });
-    const draftOpportunities = await Opportunity.countDocuments({ status: 'draft' });
-    const expiredOpportunities = await Opportunity.countDocuments({ status: 'expired' });
+    const [
+      totalUsers,
+      activeUsers,
+      verifiedUsers,
+      totalOpportunities,
+      publishedOpportunities,
+      draftOpportunities,
+      expiredOpportunities,
+      pendingVerificationOpportunities,
+      verifiedOpportunities,
+      newTodayOpportunities,
+      totalScholarships,
+      totalInternships,
+      totalFellowships,
+      totalGrants,
+      totalJobs,
+      totalCompetitions,
+      totalSources,
+      healthySources,
+      failedSources,
+      totalSubscriptions,
+      totalNotifications,
+      successfulNotifications,
+      failedNotifications,
+    ] = await Promise.all([
+      User.countDocuments(),
+      User.countDocuments({ accountStatus: 'active' }),
+      User.countDocuments({ emailVerified: true }),
+      Opportunity.countDocuments(),
+      Opportunity.countDocuments({ status: 'published' }),
+      Opportunity.countDocuments({ status: 'draft' }),
+      Opportunity.countDocuments({ status: 'expired' }),
+      Opportunity.countDocuments({ verificationStatus: 'pending' }),
+      Opportunity.countDocuments({ verificationStatus: { $in: ['verified', 'official_source'] } }),
+      Opportunity.countDocuments({ createdAt: { $gte: today } }),
+      Opportunity.countDocuments({ type: 'scholarship' }),
+      Opportunity.countDocuments({ type: 'internship' }),
+      Opportunity.countDocuments({ type: 'fellowship' }),
+      Opportunity.countDocuments({ type: 'grant' }),
+      Opportunity.countDocuments({ type: 'job' }),
+      Opportunity.countDocuments({ type: 'competition' }),
+      OpportunitySource.countDocuments(),
+      OpportunitySource.countDocuments({ healthStatus: 'healthy', active: true }),
+      OpportunitySource.countDocuments({ healthStatus: 'failed', active: true }),
+      Subscription.countDocuments(),
+      Notification.countDocuments(),
+      Notification.countDocuments({ status: 'sent' }),
+      Notification.countDocuments({ status: 'failed' }),
+    ]);
 
-    const totalScholarships = await Opportunity.countDocuments({ type: 'scholarship' });
-    const totalInternships = await Opportunity.countDocuments({ type: 'internship' });
-    const totalFellowships = await Opportunity.countDocuments({ type: 'fellowship' });
-    const totalGrants = await Opportunity.countDocuments({ type: 'grant' });
-
-    const totalSubscriptions = await Subscription.countDocuments();
-    const totalNotifications = await Notification.countDocuments();
-    const successfulNotifications = await Notification.countDocuments({ status: 'sent' });
-    const failedNotifications = await Notification.countDocuments({ status: 'failed' });
-
-    // Most viewed/saved opportunities (we'll mock for now, can be based on saved count)
+    // Most saved opportunities
     const mostSaved = await SavedOpportunity.aggregate([
       { $group: { _id: '$opportunity', count: { $sum: 1 } } },
       { $sort: { count: -1 } },
-      { $limit: 5 },
-      { $lookup: { from: 'opportunities', localField: '_id', foreignField: '_id', as: 'opportunity' } },
+      { $limit: 6 },
+      {
+        $lookup: {
+          from: 'opportunities',
+          localField: '_id',
+          foreignField: '_id',
+          as: 'opportunity',
+        },
+      },
       { $unwind: '$opportunity' },
-      { $project: { title: '$opportunity.title', count: 1 } },
+      {
+        $project: {
+          title: '$opportunity.title',
+          type: '$opportunity.type',
+          country: '$opportunity.country',
+          count: 1,
+        },
+      },
     ]);
 
+    // Most viewed opportunities
+    const mostViewed = await Opportunity.find({ status: 'published' })
+      .sort({ viewsCount: -1 })
+      .limit(6)
+      .select('title type country viewsCount clicksCount');
+
     // Recent registrations
-    const recentUsers = await User.find().sort({ createdAt: -1 }).limit(5).select('fullName email createdAt');
+    const recentUsers = await User.find()
+      .sort({ createdAt: -1 })
+      .limit(5)
+      .select('fullName email createdAt accountStatus');
 
     res.json({
       stats: {
@@ -51,25 +109,99 @@ export const getDashboardStats = async (req, res) => {
         publishedOpportunities,
         draftOpportunities,
         expiredOpportunities,
+        pendingVerificationOpportunities,
+        verifiedOpportunities,
+        newTodayOpportunities,
         totalScholarships,
         totalInternships,
         totalFellowships,
         totalGrants,
+        totalJobs,
+        totalCompetitions,
+        totalSources,
+        healthySources,
+        failedSources,
         totalSubscriptions,
         totalNotifications,
         successfulNotifications,
         failedNotifications,
       },
       mostSaved,
+      mostViewed,
       recentUsers,
     });
   } catch (error) {
-    console.error(error);
+    console.error('getDashboardStats error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };
+
+// @desc    Verify or moderate an opportunity
+// @route   PUT /api/admin/opportunities/:id/verify
+// @access  Private/Admin
+export const verifyOpportunity = async (req, res) => {
+  try {
+    const { verificationStatus, verificationNotes, autoPublish = true } = req.body;
+    const opportunity = await Opportunity.findById(req.params.id);
+    if (!opportunity) return res.status(404).json({ message: 'Opportunity not found' });
+
+    if (verificationStatus) {
+      opportunity.verificationStatus = verificationStatus;
+      opportunity.verifiedBy = req.user.id;
+      opportunity.verifiedAt = new Date();
+      if (verificationStatus === 'verified' && autoPublish) {
+        opportunity.status = 'published';
+      }
+    }
+    if (verificationNotes !== undefined) {
+      opportunity.verificationNotes = verificationNotes;
+    }
+
+    await opportunity.save();
+    res.json({ opportunity });
+  } catch (error) {
+    console.error('verifyOpportunity error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// @desc    Get all opportunities (admin view with moderation and filters)
+// @route   GET /api/admin/opportunities
+// @access  Private/Admin
+export const getAdminOpportunities = async (req, res) => {
+  try {
+    const { keyword, type, status, verificationStatus, category, country } = req.query;
+    let query = {};
+
+    if (keyword) {
+      const keywordPattern = new RegExp(keyword.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      query.$or = [
+        { title: keywordPattern },
+        { organization: keywordPattern },
+        { country: keywordPattern },
+      ];
+    }
+    if (type) query.type = type;
+    if (status) query.status = status;
+    if (verificationStatus) query.verificationStatus = verificationStatus;
+    if (category) query.category = category;
+    if (country) query.country = country;
+
+    const opportunities = await Opportunity.find(query)
+      .sort({ createdAt: -1 })
+      .populate('createdBy', 'fullName email')
+      .populate('sourceId', 'name websiteUrl healthStatus');
+
+    res.json({ opportunities });
+  } catch (error) {
+    console.error('getAdminOpportunities error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
 // @desc    Get all users (admin view)
 // @route   GET /api/admin/users
+// @access  Private/Admin
 export const getAdminUsers = async (req, res) => {
   try {
     const { search, status, role } = req.query;
@@ -90,13 +222,14 @@ export const getAdminUsers = async (req, res) => {
 
     res.json({ users });
   } catch (error) {
-    console.error(error);
+    console.error('getAdminUsers error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };
 
 // @desc    Get single user
 // @route   GET /api/admin/users/:id
+// @access  Private/Admin
 export const getAdminUser = async (req, res) => {
   try {
     const user = await User.findById(req.params.id).select('-password');
@@ -109,6 +242,7 @@ export const getAdminUser = async (req, res) => {
 
 // @desc    Update user status or role
 // @route   PUT /api/admin/users/:id
+// @access  Private/Admin
 export const updateAdminUser = async (req, res) => {
   try {
     const { accountStatus, role } = req.body;
@@ -127,6 +261,7 @@ export const updateAdminUser = async (req, res) => {
 
 // @desc    Delete user
 // @route   DELETE /api/admin/users/:id
+// @access  Private/Admin
 export const deleteAdminUser = async (req, res) => {
   try {
     const user = await User.findByIdAndDelete(req.params.id);
@@ -137,9 +272,9 @@ export const deleteAdminUser = async (req, res) => {
   }
 };
 
-
 // @desc    Get all feedback
 // @route   GET /api/admin/feedback
+// @access  Private/Admin
 export const getAdminFeedback = async (req, res) => {
   try {
     const { category, status } = req.query;
@@ -153,13 +288,14 @@ export const getAdminFeedback = async (req, res) => {
 
     res.json({ feedback });
   } catch (error) {
-    console.error(error);
+    console.error('getAdminFeedback error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };
 
-// @desc    Update feedback (respond, change status)
+// @desc    Update feedback
 // @route   PUT /api/admin/feedback/:id
+// @access  Private/Admin
 export const updateAdminFeedback = async (req, res) => {
   try {
     const { status, adminResponse } = req.body;
@@ -172,18 +308,18 @@ export const updateAdminFeedback = async (req, res) => {
     await feedback.save();
     res.json({ feedback });
   } catch (error) {
-    console.error(error);
+    console.error('updateAdminFeedback error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };
 
 // @desc    Get aggregated reports
 // @route   GET /api/admin/reports
+// @access  Private/Admin
 export const getAdminReports = async (req, res) => {
   try {
     const { startDate, endDate, type, category } = req.query;
 
-    // Date filter
     let dateFilter = {};
     if (startDate || endDate) {
       dateFilter.createdAt = {};
@@ -191,13 +327,11 @@ export const getAdminReports = async (req, res) => {
       if (endDate) dateFilter.createdAt.$lte = new Date(endDate);
     }
 
-    // User stats
     const totalUsers = await User.countDocuments(dateFilter);
     const verifiedUsers = await User.countDocuments({ ...dateFilter, emailVerified: true });
     const activeUsers = await User.countDocuments({ ...dateFilter, accountStatus: 'active' });
     const suspendedUsers = await User.countDocuments({ ...dateFilter, accountStatus: 'suspended' });
 
-    // Opportunity stats (filterable by type and category)
     let oppFilter = { ...dateFilter };
     if (type) oppFilter.type = type;
     if (category) oppFilter.category = category;
@@ -207,21 +341,18 @@ export const getAdminReports = async (req, res) => {
     const draftOpps = await Opportunity.countDocuments({ ...oppFilter, status: 'draft' });
     const expiredOpps = await Opportunity.countDocuments({ ...oppFilter, status: 'expired' });
 
-    // Opportunity breakdown by type
     const opportunitiesByType = await Opportunity.aggregate([
       { $match: oppFilter },
       { $group: { _id: '$type', count: { $sum: 1 } } },
       { $sort: { count: -1 } },
     ]);
 
-    // Opportunity breakdown by country
     const opportunitiesByCountry = await Opportunity.aggregate([
       { $match: oppFilter },
       { $group: { _id: '$country', count: { $sum: 1 } } },
       { $sort: { count: -1 } },
     ]);
 
-    // Notification stats
     const totalNotifications = await Notification.countDocuments(dateFilter);
     const emailNotifications = await Notification.countDocuments({ ...dateFilter, channel: 'email' });
     const smsNotifications = await Notification.countDocuments({ ...dateFilter, channel: 'sms' });
@@ -229,7 +360,6 @@ export const getAdminReports = async (req, res) => {
     const deliveredNotifications = await Notification.countDocuments({ ...dateFilter, status: 'delivered' });
     const failedNotifications = await Notification.countDocuments({ ...dateFilter, status: 'failed' });
 
-    // Engagement stats (most viewed/saved)
     const mostSaved = await SavedOpportunity.aggregate([
       { $group: { _id: '$opportunity', count: { $sum: 1 } } },
       { $sort: { count: -1 } },
@@ -274,33 +404,7 @@ export const getAdminReports = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Server error' });
-  }
-};
-
-// @desc    Get all opportunities (admin view)
-// @route   GET /api/admin/opportunities
-export const getAdminOpportunities = async (req, res) => {
-  try {
-    const { keyword, type, status, category, country } = req.query;
-    let query = {};
-
-    if (keyword) {
-      query.$text = { $search: keyword };
-    }
-    if (type) query.type = type;
-    if (status) query.status = status;
-    if (category) query.category = category;
-    if (country) query.country = country;
-
-    const opportunities = await Opportunity.find(query)
-      .sort({ createdAt: -1 })
-      .populate('createdBy', 'fullName email');
-
-    res.json({ opportunities });
-  } catch (error) {
-    console.error(error);
+    console.error('getAdminReports error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };

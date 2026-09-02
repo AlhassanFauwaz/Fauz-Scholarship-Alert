@@ -2,6 +2,7 @@ import express from 'express';
 import {
   getDashboardStats,
   getAdminOpportunities,
+  verifyOpportunity,
   getAdminUsers,
   getAdminUser,
   updateAdminUser,
@@ -20,7 +21,8 @@ router.use(protect, admin);
 router.get('/dashboard', getDashboardStats);
 
 // Opportunities
-router.get('/opportunities', getAdminOpportunities);   // <--- THIS MUST BE PRESENT
+router.get('/opportunities', getAdminOpportunities);
+router.put('/opportunities/:id/verify', verifyOpportunity);
 
 // Users
 router.get('/users', getAdminUsers);

@@ -10,13 +10,10 @@ const REMINDER_DAYS = process.env.REMINDER_DAYS
   : [14, 7, 3, 1];
 
 export const startDeadlineScheduler = () => {
-  cron.schedule('0 0 * * *', async () => {
-    console.log('⏰ Deadline scheduler running...');
-
+  // 1. Hourly check to expire opportunities whose deadline has passed
+  cron.schedule('0 * * * *', async () => {
     try {
       const now = new Date();
-
-      // 1. Expire opportunities
       const expiredResult = await Opportunity.updateMany(
         { status: 'published', deadline: { $lte: now } },
         { $set: { status: 'expired' } }
@@ -24,8 +21,25 @@ export const startDeadlineScheduler = () => {
       if (expiredResult.modifiedCount > 0) {
         console.log(`📦 Expired ${expiredResult.modifiedCount} opportunities.`);
       }
+    } catch (error) {
+      console.error('Hourly deadline check error:', error.message);
+    }
+  });
 
-      // 2. Send deadline reminders
+  // 2. Daily reminder broadcast at midnight UTC
+  cron.schedule('0 0 * * *', async () => {
+    console.log('⏰ Deadline reminder scheduler running...');
+
+    try {
+      const now = new Date();
+
+      // Ensure any expired opportunities are marked
+      await Opportunity.updateMany(
+        { status: 'published', deadline: { $lte: now } },
+        { $set: { status: 'expired' } }
+      );
+
+      // Send deadline reminders to users who saved opportunities closing soon
       for (const days of REMINDER_DAYS) {
         const targetDate = new Date();
         targetDate.setDate(targetDate.getDate() + days);
@@ -48,30 +62,29 @@ export const startDeadlineScheduler = () => {
               user: userId,
               opportunity: opp._id,
               type: 'deadline_reminder',
-              message: { $regex: new RegExp(`in ${days} days`) },
+              message: { $regex: new RegExp(`in ${days} days`, 'i') },
             });
             if (alreadyNotified) continue;
 
             const user = await User.findById(userId);
             if (!user) continue;
 
-            // createNotification now handles email/SMS automatically
             await createNotification({
-              user,   // full user object
+              user,
               opportunity: opp._id,
               title: `Deadline approaching: ${opp.title}`,
-              message: `The opportunity "${opp.title}" closes in ${days} days. Don't miss it!`,
+              message: `The opportunity "${opp.title}" closes in ${days} days. Don't miss the deadline!`,
               type: 'deadline_reminder',
             });
           }
         }
       }
 
-      console.log('✅ Deadline scheduler finished.');
+      console.log('✅ Deadline reminder scheduler finished.');
     } catch (error) {
-      console.error('❌ Deadline scheduler error:', error);
+      console.error('❌ Deadline reminder scheduler error:', error);
     }
   });
 
-  console.log('🕒 Deadline scheduler initialized (runs daily at midnight).');
+  console.log('🕒 Deadline scheduler initialized (hourly expiration + daily reminders).');
 };

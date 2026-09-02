@@ -1,9 +1,11 @@
 import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import API from "../../services/api";
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState(null);
   const [mostSaved, setMostSaved] = useState([]);
+  const [mostViewed, setMostViewed] = useState([]);
   const [recentUsers, setRecentUsers] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -15,8 +17,9 @@ export default function AdminDashboard() {
     try {
       const res = await API.get("/admin/dashboard");
       setStats(res.data.stats);
-      setMostSaved(res.data.mostSaved);
-      setRecentUsers(res.data.recentUsers);
+      setMostSaved(res.data.mostSaved || []);
+      setMostViewed(res.data.mostViewed || []);
+      setRecentUsers(res.data.recentUsers || []);
     } catch (err) {
       console.error(err);
     } finally {
@@ -26,153 +29,160 @@ export default function AdminDashboard() {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-64">
-        <p className="text-gray-500">Loading admin dashboard...</p>
+      <div className="flex h-64 items-center justify-center">
+        <p className="text-slate-500 text-xs font-bold">Loading admin metrics...</p>
       </div>
     );
   }
 
   if (!stats) {
     return (
-      <div className="text-center p-8">
-        <p className="text-red-500">Failed to load stats.</p>
+      <div className="p-8 text-center text-red-500 text-xs">
+        Failed to load platform statistics.
       </div>
     );
   }
 
   return (
     <div className="space-y-6 p-1">
+      {/* Header */}
       <div className="flex items-end justify-between gap-4">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary-500">
-            Overview
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#1c9c4d]">
+            Global Operations Center
           </p>
-          <h1 className="mt-2 text-3xl font-black tracking-tight text-primary-500">
-            Admin Dashboard
+          <h1 className="mt-1 text-3xl font-black text-[#0a2b3c]">
+            Admin Overview
           </h1>
         </div>
-        <div className="rounded-full border border-secondary-200 bg-secondary-50 px-3 py-1 text-xs font-semibold text-secondary-700">
-          Live metrics
+        <div className="flex items-center gap-2">
+          <Link
+            to="/admin/verification"
+            className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-bold text-amber-800 hover:bg-amber-100"
+          >
+            Review Queue ({stats.pendingVerificationOpportunities || 0})
+          </Link>
+          <Link
+            to="/admin/sources"
+            className="rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-800 hover:bg-emerald-100"
+          >
+            Manage Sources ({stats.totalSources || 0})
+          </Link>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+      {/* Top 4 KPI Metrics */}
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         {[
           {
-            label: "Total Users",
-            value: stats.totalUsers,
+            label: "Total Opportunities",
+            value: stats.totalOpportunities,
+            sub: `${stats.verifiedOpportunities || 0} Verified`,
             tone: "from-[#0a2b3c] to-[#124d67]",
-            accent: "bg-[#0a2b3c]",
           },
           {
-            label: "Active Users",
-            value: stats.activeUsers,
+            label: "Pending Verification",
+            value: stats.pendingVerificationOpportunities || 0,
+            sub: "Requires Moderation",
+            tone: "from-[#d97706] to-[#f59e0b]",
+          },
+          {
+            label: "Active Sources",
+            value: stats.totalSources || 0,
+            sub: `${stats.healthySources || 0} Healthy / ${stats.failedSources || 0} Failed`,
             tone: "from-[#1c9c4d] to-[#38b66d]",
-            accent: "bg-[#1c9c4d]",
           },
           {
-            label: "Published Opps",
-            value: stats.publishedOpportunities,
-            tone: "from-[#0f766e] to-[#10b981]",
-            accent: "bg-[#10b981]",
-          },
-          {
-            label: "Notifications",
-            value: stats.totalNotifications,
-            tone: "from-[#f59e0b] to-[#fbbf24]",
-            accent: "bg-[#f59e0b]",
+            label: "Registered Users",
+            value: stats.totalUsers,
+            sub: `${stats.activeUsers || 0} Active`,
+            tone: "from-[#4f46e5] to-[#6366f1]",
           },
         ].map((stat) => (
           <div
             key={stat.label}
-            className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_16px_40px_rgba(10,43,60,0.08)]"
+            className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
           >
             <div className={`h-1.5 bg-gradient-to-r ${stat.tone}`} />
-            <div className="p-5">
-              <div className="mb-3 flex items-center justify-between">
-                <span className="text-sm font-medium text-slate-500">
-                  {stat.label}
-                </span>
-                <span className={`h-2.5 w-2.5 rounded-full ${stat.accent}`} />
-              </div>
-              <p className="text-3xl font-black text-slate-900">{stat.value}</p>
+            <div className="p-4 sm:p-5">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                {stat.label}
+              </span>
+              <p className="mt-2 text-3xl font-black text-slate-900">{stat.value}</p>
+              <p className="mt-1 text-[11px] text-slate-500 font-medium">{stat.sub}</p>
             </div>
           </div>
         ))}
       </div>
 
+      {/* Category Breakdown & Source Health */}
       <div className="grid gap-6 md:grid-cols-2">
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_18px_45px_rgba(10,43,60,0.08)]">
-          <h2 className="mb-4 text-lg font-bold text-primary-500">
-            Opportunity Breakdown
+        {/* Breakdown by Type */}
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h2 className="mb-4 text-base font-bold text-[#0a2b3c]">
+            Opportunities by Category
           </h2>
-          <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-2 text-xs">
             {[
               ["Scholarships", stats.totalScholarships],
               ["Internships", stats.totalInternships],
               ["Fellowships", stats.totalFellowships],
               ["Grants", stats.totalGrants],
+              ["Jobs", stats.totalJobs || 0],
+              ["Competitions", stats.totalCompetitions || 0],
             ].map(([label, value]) => (
               <div
                 key={label}
-                className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2.5"
+                className="flex items-center justify-between rounded-xl bg-slate-50 p-3"
               >
-                <span className="text-sm font-medium text-slate-600">
-                  {label}
-                </span>
-                <span className="text-base font-bold text-slate-900">
-                  {value}
-                </span>
+                <span className="font-semibold text-slate-600">{label}</span>
+                <span className="font-bold text-slate-900">{value}</span>
               </div>
             ))}
           </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_18px_45px_rgba(10,43,60,0.08)]">
-          <h2 className="mb-4 text-lg font-bold text-primary-500">
-            Notification Status
+        {/* System & Notification Delivery */}
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h2 className="mb-4 text-base font-bold text-[#0a2b3c]">
+            System & Notification Health
           </h2>
-          <div className="space-y-3">
-            {[
-              ["Total Sent", stats.totalNotifications],
-              ["Successful", stats.successfulNotifications, "text-emerald-600"],
-              ["Failed", stats.failedNotifications, "text-red-600"],
-              ["Subscriptions", stats.totalSubscriptions],
-            ].map(([label, value, className = "text-slate-900"]) => (
-              <div
-                key={label}
-                className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2.5"
-              >
-                <span className="text-sm font-medium text-slate-600">
-                  {label}
-                </span>
-                <span className={`text-base font-bold ${className}`}>
-                  {value}
-                </span>
-              </div>
-            ))}
+          <div className="space-y-2 text-xs">
+            <div className="flex items-center justify-between rounded-xl bg-slate-50 p-3">
+              <span className="font-semibold text-slate-600">Total Alerts Dispatched</span>
+              <span className="font-bold text-slate-900">{stats.totalNotifications}</span>
+            </div>
+            <div className="flex items-center justify-between rounded-xl bg-slate-50 p-3">
+              <span className="font-semibold text-slate-600">Delivered Successfully</span>
+              <span className="font-bold text-emerald-600">{stats.successfulNotifications}</span>
+            </div>
+            <div className="flex items-center justify-between rounded-xl bg-slate-50 p-3">
+              <span className="font-semibold text-slate-600">Failed Dispatches</span>
+              <span className="font-bold text-red-600">{stats.failedNotifications}</span>
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[1.1fr,0.9fr]">
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_18px_45px_rgba(10,43,60,0.08)]">
-          <h2 className="mb-4 text-lg font-bold text-primary-500">
+      {/* Most Saved & Most Viewed Opportunities */}
+      <div className="grid gap-6 md:grid-cols-2">
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h2 className="mb-4 text-base font-bold text-[#0a2b3c]">
             Most Saved Opportunities
           </h2>
           {mostSaved.length === 0 ? (
-            <p className="text-sm text-slate-500">No saved data yet.</p>
+            <p className="text-xs text-slate-500">No bookmark data recorded yet.</p>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-2 text-xs">
               {mostSaved.map((item, i) => (
                 <div
                   key={i}
-                  className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5"
+                  className="flex items-center justify-between rounded-xl bg-slate-50 p-2.5"
                 >
-                  <span className="text-sm font-medium text-slate-700">
+                  <span className="font-medium text-slate-800 line-clamp-1 flex-1 pr-2">
                     {item.title}
                   </span>
-                  <span className="rounded-full bg-secondary-100 px-2.5 py-1 text-xs font-bold text-secondary-700">
+                  <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-800">
                     {item.count} saves
                   </span>
                 </div>
@@ -181,29 +191,28 @@ export default function AdminDashboard() {
           )}
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_18px_45px_rgba(10,43,60,0.08)]">
-          <h2 className="mb-4 text-lg font-bold text-primary-500">
-            Recent Registrations
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h2 className="mb-4 text-base font-bold text-[#0a2b3c]">
+            Most Viewed Opportunities
           </h2>
-          {recentUsers.length === 0 ? (
-            <p className="text-sm text-slate-500">No recent users.</p>
+          {mostViewed.length === 0 ? (
+            <p className="text-xs text-slate-500">No view analytics yet.</p>
           ) : (
-            <ul className="space-y-3">
-              {recentUsers.map((u) => (
-                <li
-                  key={u._id}
-                  className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5"
+            <div className="space-y-2 text-xs">
+              {mostViewed.map((item, i) => (
+                <div
+                  key={i}
+                  className="flex items-center justify-between rounded-xl bg-slate-50 p-2.5"
                 >
-                  <div>
-                    <p className="font-semibold text-slate-800">{u.fullName}</p>
-                    <p className="text-xs text-slate-500">{u.email}</p>
-                  </div>
-                  <span className="text-xs text-slate-500">
-                    {new Date(u.createdAt).toLocaleDateString()}
+                  <span className="font-medium text-slate-800 line-clamp-1 flex-1 pr-2">
+                    {item.title}
                   </span>
-                </li>
+                  <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-bold text-sky-800">
+                    {item.viewsCount || 0} views
+                  </span>
+                </div>
               ))}
-            </ul>
+            </div>
           )}
         </div>
       </div>

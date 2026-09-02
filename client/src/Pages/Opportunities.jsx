@@ -1,190 +1,417 @@
 import { useEffect, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import API from "../services/api";
-import fallbackImage from "../assets/soas.jpg";
+import OpportunityCard from "../components/OpportunityCard";
 
-const typeStyles = {
-  scholarship: "bg-emerald-100 text-emerald-700",
-  internship: "bg-sky-100 text-sky-700",
-  fellowship: "bg-violet-100 text-violet-700",
-  grant: "bg-cyan-100 text-cyan-700",
-  competition: "bg-amber-100 text-amber-700",
-  research: "bg-fuchsia-100 text-fuchsia-700",
-  other: "bg-slate-200 text-slate-700",
-};
+const OPPORTUNITY_TYPES = [
+  { label: "All Types", value: "" },
+  { label: "Scholarship", value: "scholarship" },
+  { label: "Internship", value: "internship" },
+  { label: "Grant", value: "grant" },
+  { label: "Fellowship", value: "fellowship" },
+  { label: "Job", value: "job" },
+  { label: "Research", value: "research" },
+  { label: "Training", value: "training" },
+  { label: "Competition", value: "competition" },
+  { label: "Exchange Program", value: "exchange" },
+  { label: "Graduate Programme", value: "graduate_programme" },
+  { label: "Volunteer", value: "volunteer" },
+  { label: "Conference / Event", value: "conference" },
+  { label: "Entrepreneurship", value: "entrepreneurship" },
+  { label: "Funding", value: "funding" },
+  { label: "Other", value: "other" },
+];
+
+const REGIONS = [
+  { label: "All Regions", value: "" },
+  { label: "Africa", value: "Africa" },
+  { label: "Europe", value: "Europe" },
+  { label: "North America", value: "North America" },
+  { label: "South America", value: "South America" },
+  { label: "Asia", value: "Asia" },
+  { label: "Oceania", value: "Oceania" },
+  { label: "Middle East", value: "Middle East" },
+  { label: "Worldwide / Global", value: "Worldwide" },
+];
+
+const DEGREE_LEVELS = [
+  { label: "Any Education Level", value: "" },
+  { label: "High School", value: "highschool" },
+  { label: "Diploma / Certificate", value: "diploma" },
+  { label: "Bachelor's / Undergraduate", value: "undergraduate" },
+  { label: "Master's / Graduate", value: "graduate" },
+  { label: "PhD / Doctorate", value: "phd" },
+  { label: "Postdoctoral", value: "postdoctoral" },
+  { label: "Professional", value: "professional" },
+];
+
+const FUNDING_TYPES = [
+  { label: "All Funding Types", value: "" },
+  { label: "Fully Funded", value: "fully_funded" },
+  { label: "Partially Funded", value: "partially_funded" },
+  { label: "Tuition Only", value: "tuition_only" },
+  { label: "Stipend / Allowance", value: "stipend" },
+  { label: "Paid Opportunity", value: "paid" },
+  { label: "No Funding / Unfunded", value: "no_funding" },
+];
 
 export default function Opportunities() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [opportunities, setOpportunities] = useState([]);
+  const [pagination, setPagination] = useState({ total: 0, page: 1, totalPages: 1 });
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState(() => searchParams.get("keyword") || "");
+
+  // Filters state initialized from URL search params
+  const [keyword, setKeyword] = useState(() => searchParams.get("keyword") || "");
   const [type, setType] = useState(() => searchParams.get("type") || "");
+  const [region, setRegion] = useState(() => searchParams.get("region") || "");
+  const [country, setCountry] = useState(() => searchParams.get("country") || "");
+  const [degreeLevel, setDegreeLevel] = useState(() => searchParams.get("degreeLevel") || "");
+  const [fundingType, setFundingType] = useState(() => searchParams.get("fundingType") || "");
+  const [isRemote, setIsRemote] = useState(() => searchParams.get("isRemote") === "true");
+  const [closingSoon, setClosingSoon] = useState(() => searchParams.get("closingSoon") === "true");
+  const [featured, setFeatured] = useState(() => searchParams.get("featured") === "true");
+  const [sort, setSort] = useState(() => searchParams.get("sort") || "latest");
+  const [page, setPage] = useState(() => parseInt(searchParams.get("page") || "1", 10));
+
+  const fetchOpportunities = async () => {
+    setLoading(true);
+    try {
+      const params = {
+        page,
+        limit: 18,
+        sort,
+      };
+
+      if (keyword.trim()) params.keyword = keyword.trim();
+      if (type) params.type = type;
+      if (region) params.region = region;
+      if (country.trim()) params.country = country.trim();
+      if (degreeLevel) params.degreeLevel = degreeLevel;
+      if (fundingType) params.fundingType = fundingType;
+      if (isRemote) params.isRemote = "true";
+      if (closingSoon) params.closingSoon = "true";
+      if (featured) params.featured = "true";
+
+      const res = await API.get("/opportunities", { params });
+      setOpportunities(res.data.opportunities || []);
+      setPagination(res.data.pagination || { total: 0, page: 1, totalPages: 1 });
+    } catch (err) {
+      console.error("Failed to load opportunities", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchOpportunities = async () => {
-      setLoading(true);
-      try {
-        const params = { sort: "latest", limit: 100 };
-        if (type) params.type = type;
-        if (search) params.keyword = search;
-
-        const res = await API.get("/opportunities", { params });
-        setOpportunities(res.data.opportunities || []);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchOpportunities();
-  }, [search, type]);
+
+    // Sync URL search params
+    const nextParams = new URLSearchParams();
+    if (keyword) nextParams.set("keyword", keyword);
+    if (type) nextParams.set("type", type);
+    if (region) nextParams.set("region", region);
+    if (country) nextParams.set("country", country);
+    if (degreeLevel) nextParams.set("degreeLevel", degreeLevel);
+    if (fundingType) nextParams.set("fundingType", fundingType);
+    if (isRemote) nextParams.set("isRemote", "true");
+    if (closingSoon) nextParams.set("closingSoon", "true");
+    if (featured) nextParams.set("featured", "true");
+    if (sort !== "latest") nextParams.set("sort", sort);
+    if (page > 1) nextParams.set("page", page.toString());
+    setSearchParams(nextParams, { replace: true });
+  }, [keyword, type, region, country, degreeLevel, fundingType, isRemote, closingSoon, featured, sort, page]);
+
+  const handleResetFilters = () => {
+    setKeyword("");
+    setType("");
+    setRegion("");
+    setCountry("");
+    setDegreeLevel("");
+    setFundingType("");
+    setIsRemote(false);
+    setClosingSoon(false);
+    setFeatured(false);
+    setSort("latest");
+    setPage(1);
+  };
+
+  const handleSearchSubmit = (e) => {
+    e.preventDefault();
+    setPage(1);
+    fetchOpportunities();
+  };
 
   return (
-    <div className="bg-[#f3f8fb]">
-      <section className="bg-[radial-gradient(circle_at_top,_rgba(28,156,77,0.18),_transparent_28%),linear-gradient(135deg,#081d2a_0%,#0a2b3c_38%,#133d52_100%)] text-white">
-        <div className="mx-auto max-w-6xl px-4 py-16 md:py-20">
-          <div className="mb-8">
-            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-emerald-300">
-              Explore
-            </p>
-            <h1 className="mt-3 text-4xl font-black tracking-tight md:text-5xl">
-              Find the right opportunity
-            </h1>
-          </div>
+    <div className="min-h-screen bg-[#f3f8fb]">
+      {/* Header Banner */}
+      <section className="bg-[linear-gradient(135deg,#081d2a_0%,#0a2b3c_40%,#133d52_100%)] text-white py-12 md:py-16">
+        <div className="mx-auto max-w-6xl px-4">
+          <p className="text-xs font-bold uppercase tracking-[0.25em] text-emerald-300">
+            Global Opportunity Feed
+          </p>
+          <h1 className="mt-3 text-3xl font-black md:text-5xl">
+            Explore Opportunities Worldwide
+          </h1>
+          <p className="mt-3 max-w-2xl text-slate-200">
+            Filter by opportunity category, education level, funding status, country, or delivery mode.
+          </p>
 
-          <div className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/5 p-3 backdrop-blur-sm md:flex-row">
+          {/* Quick Search Bar */}
+          <form onSubmit={handleSearchSubmit} className="mt-6 flex max-w-2xl gap-2">
             <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search keywords..."
-              className="flex-1 rounded-xl border border-white/10 bg-white/10 px-4 py-3 text-sm text-white placeholder:text-slate-300 outline-none focus:border-emerald-300"
+              type="text"
+              placeholder="Search keyword, field, university, or country..."
+              value={keyword}
+              onChange={(e) => {
+                setKeyword(e.target.value);
+                setPage(1);
+              }}
+              className="flex-1 rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-sm text-white placeholder:text-slate-300 outline-none focus:border-emerald-300 focus:bg-white/15"
             />
-            <select
-              value={type}
-              onChange={(e) => setType(e.target.value)}
-              className="rounded-xl border border-white/10 bg-white/10 px-4 py-3 text-sm text-white outline-none focus:border-emerald-300"
+            <button
+              type="submit"
+              className="rounded-xl bg-[#1c9c4d] px-6 py-3 text-sm font-bold text-white transition hover:brightness-110"
             >
-              <option value="" className="text-slate-900">
-                All types
-              </option>
-              <option value="scholarship" className="text-slate-900">
-                Scholarship
-              </option>
-              <option value="internship" className="text-slate-900">
-                Internship
-              </option>
-              <option value="fellowship" className="text-slate-900">
-                Fellowship
-              </option>
-              <option value="grant" className="text-slate-900">
-                Grant
-              </option>
-              <option value="competition" className="text-slate-900">
-                Competition
-              </option>
-              <option value="research" className="text-slate-900">
-                Research
-              </option>
-            </select>
-          </div>
+              Search
+            </button>
+          </form>
         </div>
       </section>
 
-      <main className="mx-auto max-w-6xl px-4 py-10">
-        {loading ? (
-          <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center text-slate-500 shadow-[0_18px_45px_rgba(10,43,60,0.06)]">
-            Loading opportunities...
-          </div>
-        ) : opportunities.length === 0 ? (
-          <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center text-slate-500 shadow-[0_18px_45px_rgba(10,43,60,0.06)]">
-            No opportunities found for this search.
-          </div>
-        ) : (
-          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-            {opportunities.map((opp) => {
-              const daysLeft = Math.ceil(
-                (new Date(opp.deadline) - new Date()) / (1000 * 60 * 60 * 24),
-              );
-              const badgeClass =
-                typeStyles[opp.type] || "bg-slate-200 text-slate-700";
+      {/* Main Content Layout with Filters Sidebar & Feed */}
+      <div className="mx-auto max-w-6xl px-4 py-10">
+        <div className="grid gap-8 lg:grid-cols-[280px_1fr]">
+          {/* Filters Sidebar */}
+          <aside className="space-y-6 rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_12px_35px_rgba(10,43,60,0.06)] h-fit">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="font-black text-[#0a2b3c]">Filters</h3>
+              <button
+                onClick={handleResetFilters}
+                className="text-xs font-semibold text-slate-500 hover:text-red-500"
+              >
+                Reset All
+              </button>
+            </div>
 
-              return (
-                <div
-                  key={opp._id}
-                  className="flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_18px_45px_rgba(10,43,60,0.08)] transition hover:-translate-y-1 hover:shadow-[0_24px_55px_rgba(10,43,60,0.12)]"
+            {/* Opportunity Type */}
+            <div>
+              <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-600">
+                Opportunity Type
+              </label>
+              <select
+                value={type}
+                onChange={(e) => {
+                  setType(e.target.value);
+                  setPage(1);
+                }}
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-800 outline-none focus:border-emerald-500"
+              >
+                {OPPORTUNITY_TYPES.map((t) => (
+                  <option key={t.value} value={t.value}>
+                    {t.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Region */}
+            <div>
+              <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-600">
+                Region
+              </label>
+              <select
+                value={region}
+                onChange={(e) => {
+                  setRegion(e.target.value);
+                  setPage(1);
+                }}
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-800 outline-none focus:border-emerald-500"
+              >
+                {REGIONS.map((r) => (
+                  <option key={r.value} value={r.value}>
+                    {r.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Degree Level */}
+            <div>
+              <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-600">
+                Degree Level
+              </label>
+              <select
+                value={degreeLevel}
+                onChange={(e) => {
+                  setDegreeLevel(e.target.value);
+                  setPage(1);
+                }}
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-800 outline-none focus:border-emerald-500"
+              >
+                {DEGREE_LEVELS.map((d) => (
+                  <option key={d.value} value={d.value}>
+                    {d.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Funding Type */}
+            <div>
+              <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-600">
+                Funding
+              </label>
+              <select
+                value={fundingType}
+                onChange={(e) => {
+                  setFundingType(e.target.value);
+                  setPage(1);
+                }}
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-800 outline-none focus:border-emerald-500"
+              >
+                {FUNDING_TYPES.map((f) => (
+                  <option key={f.value} value={f.value}>
+                    {f.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Country Input */}
+            <div>
+              <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-600">
+                Specific Country
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. Ghana, Canada, UK"
+                value={country}
+                onChange={(e) => {
+                  setCountry(e.target.value);
+                  setPage(1);
+                }}
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-800 outline-none focus:border-emerald-500"
+              />
+            </div>
+
+            {/* Toggles */}
+            <div className="space-y-3 border-t border-slate-100 pt-3">
+              <label className="flex cursor-pointer items-center gap-2.5 text-xs font-semibold text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={isRemote}
+                  onChange={(e) => {
+                    setIsRemote(e.target.checked);
+                    setPage(1);
+                  }}
+                  className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                />
+                Remote Only
+              </label>
+
+              <label className="flex cursor-pointer items-center gap-2.5 text-xs font-semibold text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={closingSoon}
+                  onChange={(e) => {
+                    setClosingSoon(e.target.checked);
+                    setPage(1);
+                  }}
+                  className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                />
+                Closing Soon (7 Days)
+              </label>
+
+              <label className="flex cursor-pointer items-center gap-2.5 text-xs font-semibold text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={featured}
+                  onChange={(e) => {
+                    setFeatured(e.target.checked);
+                    setPage(1);
+                  }}
+                  className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                />
+                Featured Only
+              </label>
+            </div>
+          </aside>
+
+          {/* Results Area */}
+          <main className="space-y-6">
+            {/* Header with count and Sort */}
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm font-semibold text-slate-600">
+                Showing <span className="font-bold text-[#0a2b3c]">{opportunities.length}</span> of{" "}
+                <span className="font-bold text-[#0a2b3c]">{pagination.total}</span> opportunities
+              </p>
+
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-slate-500">Sort by:</span>
+                <select
+                  value={sort}
+                  onChange={(e) => setSort(e.target.value)}
+                  className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 shadow-sm outline-none"
                 >
-                  <div className="relative h-44 w-full overflow-hidden bg-slate-200">
-                    <img
-                      src={opp.image || fallbackImage}
-                      alt={opp.title}
-                      className="h-full w-full object-cover"
-                      onError={(event) => {
-                        event.currentTarget.onerror = null;
-                        event.currentTarget.src = fallbackImage;
-                      }}
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/55 to-transparent" />
-                  </div>
+                  <option value="latest">Latest Discovered</option>
+                  <option value="deadline">Closing Soonest</option>
+                  <option value="popular">Most Popular</option>
+                </select>
+              </div>
+            </div>
 
-                  <div className="flex flex-1 flex-col p-5">
-                  <div className="mb-4 flex items-start justify-between gap-3">
-                    <div>
-                      <span
-                        className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold capitalize ${badgeClass}`}
-                      >
-                        {opp.type}
-                      </span>
-                      <h2 className="mt-3 text-xl font-bold text-slate-900">
-                        {opp.title}
-                      </h2>
-                    </div>
-                    <span className="rounded-full bg-[#0a2b3c]/5 px-2.5 py-1 text-[11px] font-semibold text-[#0a2b3c]">
-                      {opp.country || "Global"}
-                    </span>
-                  </div>
+            {/* Grid */}
+            {loading ? (
+              <div className="rounded-2xl border border-slate-200 bg-white p-16 text-center text-slate-500 shadow-sm">
+                Loading opportunities...
+              </div>
+            ) : opportunities.length === 0 ? (
+              <div className="rounded-2xl border border-slate-200 bg-white p-16 text-center shadow-sm">
+                <p className="text-lg font-bold text-slate-800">No opportunities match your current filters.</p>
+                <p className="mt-2 text-sm text-slate-500">Try broadening your search keywords or resetting filters.</p>
+                <button
+                  onClick={handleResetFilters}
+                  className="mt-4 inline-block rounded-xl bg-[#0a2b3c] px-5 py-2.5 text-xs font-bold text-white transition hover:bg-[#1c9c4d]"
+                >
+                  Clear All Filters
+                </button>
+              </div>
+            ) : (
+              <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+                {opportunities.map((opp) => (
+                  <OpportunityCard key={opp._id} opp={opp} />
+                ))}
+              </div>
+            )}
 
-                  <p className="text-sm text-slate-600">{opp.organization}</p>
+            {/* Pagination Controls */}
+            {pagination.totalPages > 1 && (
+              <div className="mt-8 flex items-center justify-center gap-3">
+                <button
+                  disabled={page <= 1}
+                  onClick={() => setPage((p) => Math.max(p - 1, 1))}
+                  className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-40"
+                >
+                  ← Previous
+                </button>
 
-                  <div className="mt-4 space-y-2 text-sm text-slate-600">
-                    <p>
-                      Deadline: {new Date(opp.deadline).toLocaleDateString()}
-                    </p>
-                    <p
-                      className={
-                        daysLeft <= 7 ? "font-semibold text-red-600" : ""
-                      }
-                    >
-                      {daysLeft > 0
-                        ? `${daysLeft} days left`
-                        : "Deadline passed"}
-                    </p>
-                  </div>
+                <span className="text-xs font-semibold text-slate-600">
+                  Page {page} of {pagination.totalPages}
+                </span>
 
-                  <p className="mt-4 line-clamp-3 text-sm leading-relaxed text-slate-600">
-                    {opp.description ||
-                      "We have a great opportunity for students and professionals looking to grow."}
-                  </p>
-
-                  <div className="mt-5 flex items-center justify-between border-t border-slate-200 pt-4">
-                    <span className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400">
-                      Open
-                    </span>
-                    <Link
-                      to={`/opportunity/${opp._id}`}
-                      className="inline-flex items-center gap-2 font-semibold text-[#0a2b3c] hover:text-[#1c9c4d]"
-                    >
-                      View details
-                      <span aria-hidden="true">→</span>
-                    </Link>
-                  </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </main>
+                <button
+                  disabled={page >= pagination.totalPages}
+                  onClick={() => setPage((p) => Math.min(p + 1, pagination.totalPages))}
+                  className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-40"
+                >
+                  Next →
+                </button>
+              </div>
+            )}
+          </main>
+        </div>
+      </div>
     </div>
   );
 }

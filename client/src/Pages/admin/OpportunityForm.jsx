@@ -1,6 +1,24 @@
-import { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import API from '../../services/api';
+import { useState, useEffect } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import API from "../../services/api";
+
+const OPPORTUNITY_TYPES = [
+  { label: "Scholarship", value: "scholarship" },
+  { label: "Internship", value: "internship" },
+  { label: "Grant", value: "grant" },
+  { label: "Fellowship", value: "fellowship" },
+  { label: "Job", value: "job" },
+  { label: "Research", value: "research" },
+  { label: "Training", value: "training" },
+  { label: "Competition", value: "competition" },
+  { label: "Exchange Program", value: "exchange" },
+  { label: "Graduate Programme", value: "graduate_programme" },
+  { label: "Volunteer", value: "volunteer" },
+  { label: "Conference / Event", value: "conference" },
+  { label: "Entrepreneurship", value: "entrepreneurship" },
+  { label: "Funding", value: "funding" },
+  { label: "Other", value: "other" },
+];
 
 export default function OpportunityForm() {
   const { id } = useParams();
@@ -8,29 +26,38 @@ export default function OpportunityForm() {
   const navigate = useNavigate();
 
   const [form, setForm] = useState({
-    title: '',
-    type: 'scholarship',
-    category: '',
-    organization: '',
-    description: '',
-    eligibility: {
-      minEducationLevel: '',
-      fieldOfStudy: '',
-      countryEligibility: '',
-      gender: '',
-      other: '',
-    },
-    country: '',
-    applicationUrl: '',
-    deadline: '',
-    status: 'draft',
+    title: "",
+    shortDescription: "",
+    type: "scholarship",
+    category: "General",
+    organization: "",
+    provider: "",
+    description: "",
+    country: "Worldwide",
+    region: "Worldwide",
+    isRemote: false,
+    fundingType: "other",
+    fundingAmount: "",
+    degreeLevels: "undergraduate",
+    fieldsOfStudy: "",
+    skills: "",
+    documentsRequired: "",
+    tags: "",
+    applicationUrl: "",
+    officialWebsite: "",
+    sourceName: "",
+    sourceUrl: "",
+    deadline: "",
+    status: "published",
+    verificationStatus: "verified",
     featured: false,
-    imageFile: null,        // the actual File object
-    imagePreview: null,     // local preview URL
-    image: '',              // existing image URL from server
+    imageFile: null,
+    imagePreview: null,
+    image: "",
   });
+
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
 
   useEffect(() => {
     if (isEditing) {
@@ -39,30 +66,38 @@ export default function OpportunityForm() {
           const res = await API.get(`/opportunities/${id}`);
           const opp = res.data.opportunity;
           setForm({
-            title: opp.title || '',
-            type: opp.type || 'scholarship',
-            category: opp.category || '',
-            organization: opp.organization || '',
-            description: opp.description || '',
-            eligibility: {
-              minEducationLevel: opp.eligibility?.minEducationLevel || '',
-              fieldOfStudy: opp.eligibility?.fieldOfStudy || '',
-              countryEligibility: opp.eligibility?.countryEligibility?.join(', ') || '',
-              gender: opp.eligibility?.gender || '',
-              other: opp.eligibility?.other || '',
-            },
-            country: opp.country || '',
-            applicationUrl: opp.applicationUrl || '',
-            deadline: opp.deadline ? opp.deadline.slice(0, 10) : '',
-            status: opp.status || 'draft',
+            title: opp.title || "",
+            shortDescription: opp.shortDescription || "",
+            type: opp.type || "scholarship",
+            category: opp.category || "General",
+            organization: opp.organization || "",
+            provider: opp.provider || "",
+            description: opp.description || "",
+            country: opp.country || "Worldwide",
+            region: opp.region || "Worldwide",
+            isRemote: opp.isRemote || false,
+            fundingType: opp.fundingType || "other",
+            fundingAmount: opp.fundingAmount || "",
+            degreeLevels: opp.degreeLevels?.join(", ") || opp.eligibility?.minEducationLevel || "",
+            fieldsOfStudy: opp.fieldsOfStudy?.join(", ") || opp.eligibility?.fieldOfStudy || "",
+            skills: opp.skills?.join(", ") || "",
+            documentsRequired: opp.documentsRequired?.join(", ") || "",
+            tags: opp.tags?.join(", ") || "",
+            applicationUrl: opp.applicationUrl || "",
+            officialWebsite: opp.officialWebsite || "",
+            sourceName: opp.sourceName || "",
+            sourceUrl: opp.sourceUrl || "",
+            deadline: opp.deadline ? opp.deadline.slice(0, 10) : "",
+            status: opp.status || "published",
+            verificationStatus: opp.verificationStatus || "verified",
             featured: opp.featured || false,
             imageFile: null,
             imagePreview: null,
-            image: opp.image || '',
+            image: opp.image || "",
           });
         } catch (err) {
           console.error(err);
-          navigate('/admin/opportunities');
+          navigate("/admin/opportunities");
         }
       };
       fetchOpportunity();
@@ -71,199 +106,338 @@ export default function OpportunityForm() {
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
-    if (name.startsWith('eligibility.')) {
-      const field = name.split('.')[1];
-      setForm(prev => ({
-        ...prev,
-        eligibility: { ...prev.eligibility, [field]: value },
-      }));
-    } else {
-      setForm(prev => ({
-        ...prev,
-        [name]: type === 'checkbox' ? checked : value,
-      }));
-    }
-   
+    setForm((prev) => ({
+      ...prev,
+      [name]: type === "checkbox" ? checked : value,
+    }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    setError('');
+    setError("");
 
     const payload = new FormData();
-    payload.append('title', form.title);
-    payload.append('type', form.type);
-    payload.append('category', form.category);
-    payload.append('organization', form.organization);
-    payload.append('description', form.description);
-    payload.append('country', form.country);
-    payload.append('applicationUrl', form.applicationUrl);
-    payload.append('deadline', form.deadline);
-    payload.append('status', form.status);
-    payload.append('featured', form.featured);
+    payload.append("title", form.title);
+    payload.append("shortDescription", form.shortDescription);
+    payload.append("type", form.type);
+    payload.append("category", form.category);
+    payload.append("organization", form.organization);
+    payload.append("provider", form.provider);
+    payload.append("description", form.description);
+    payload.append("country", form.country);
+    payload.append("region", form.region);
+    payload.append("isRemote", form.isRemote);
+    payload.append("fundingType", form.fundingType);
+    payload.append("fundingAmount", form.fundingAmount);
+    payload.append("degreeLevels", form.degreeLevels);
+    payload.append("fieldsOfStudy", form.fieldsOfStudy);
+    payload.append("skills", form.skills);
+    payload.append("documentsRequired", form.documentsRequired);
+    payload.append("tags", form.tags);
+    payload.append("applicationUrl", form.applicationUrl);
+    payload.append("officialWebsite", form.officialWebsite);
+    payload.append("sourceName", form.sourceName);
+    payload.append("sourceUrl", form.sourceUrl);
+    payload.append("deadline", form.deadline);
+    payload.append("status", form.status);
+    payload.append("verificationStatus", form.verificationStatus);
+    payload.append("featured", form.featured);
 
-    // Eligibility as JSON string
-    payload.append('eligibility', JSON.stringify({
-      minEducationLevel: form.eligibility.minEducationLevel,
-      fieldOfStudy: form.eligibility.fieldOfStudy,
-      countryEligibility: form.eligibility.countryEligibility
-        ? form.eligibility.countryEligibility.split(',').map(s => s.trim()).filter(Boolean)
-        : [],
-      gender: form.eligibility.gender,
-      other: form.eligibility.other,
-    }));
-
-    // Append image file if selected
     if (form.imageFile) {
-      payload.append('image', form.imageFile);
+      payload.append("image", form.imageFile);
     }
 
     try {
       if (isEditing) {
         await API.put(`/opportunities/${id}`, payload, {
-          headers: { 'Content-Type': 'multipart/form-data' },
+          headers: { "Content-Type": "multipart/form-data" },
         });
       } else {
-        await API.post('/opportunities', payload, {
-          headers: { 'Content-Type': 'multipart/form-data' },
+        await API.post("/opportunities", payload, {
+          headers: { "Content-Type": "multipart/form-data" },
         });
       }
-      navigate('/admin/opportunities');
+      navigate("/admin/opportunities");
     } catch (err) {
-      setError(err.response?.data?.message || 'Something went wrong');
+      setError(err.response?.data?.message || "Failed to save opportunity");
     } finally {
       setLoading(false);
     }
   };
 
+  const inputClass =
+    "w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-800 outline-none focus:border-emerald-500 focus:bg-white";
+  const labelClass = "mb-1 block text-xs font-bold text-slate-700";
+
   return (
-    <div className="container mx-auto p-4 max-w-3xl">
-      <h1 className="text-3xl font-bold text-primary-500 mb-6">
-        {isEditing ? 'Edit Opportunity' : 'Create Opportunity'}
-      </h1>
+    <div className="mx-auto max-w-4xl p-1 space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#1c9c4d]">
+            Opportunity Management
+          </p>
+          <h1 className="mt-1 text-3xl font-black text-[#0a2b3c]">
+            {isEditing ? "Edit Opportunity" : "Create New Global Opportunity"}
+          </h1>
+        </div>
+      </div>
 
-      {error && <div className="bg-red-100 text-red-800 p-4 rounded mb-4">{error}</div>}
+      {error && (
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-xs font-bold text-red-800">
+          ⚠️ {error}
+        </div>
+      )}
 
-      <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg shadow space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium mb-1">Title *</label>
-            <input name="title" value={form.title} onChange={handleChange} required className="w-full p-2 border rounded" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Type *</label>
-            <select name="type" value={form.type} onChange={handleChange} className="w-full p-2 border rounded">
-              <option value="scholarship">Scholarship</option>
-              <option value="internship">Internship</option>
-              <option value="fellowship">Fellowship</option>
-              <option value="grant">Grant</option>
-              <option value="competition">Competition</option>
-              <option value="research">Research</option>
-              <option value="other">Other</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Category *</label>
-            <input name="category" value={form.category} onChange={handleChange} required className="w-full p-2 border rounded" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Organization *</label>
-            <input name="organization" value={form.organization} onChange={handleChange} required className="w-full p-2 border rounded" />
-          </div>
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium mb-1">Description *</label>
-            <textarea name="description" value={form.description} onChange={handleChange} required className="w-full p-2 border rounded" rows={5} />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Min Education Level</label>
-            <select name="eligibility.minEducationLevel" value={form.eligibility.minEducationLevel} onChange={handleChange} className="w-full p-2 border rounded">
-              <option value="">Any</option>
-              <option value="highschool">High School</option>
-              <option value="undergraduate">Undergraduate</option>
-              <option value="graduate">Graduate</option>
-              <option value="postgraduate">Postgraduate</option>
-              <option value="phd">PhD</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Field of Study</label>
-            <input name="eligibility.fieldOfStudy" value={form.eligibility.fieldOfStudy} onChange={handleChange} className="w-full p-2 border rounded" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Eligible Countries (comma separated)</label>
-            <input name="eligibility.countryEligibility" value={form.eligibility.countryEligibility} onChange={handleChange} className="w-full p-2 border rounded" placeholder="Ghana, Nigeria" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Gender</label>
-            <select name="eligibility.gender" value={form.eligibility.gender} onChange={handleChange} className="w-full p-2 border rounded">
-              <option value="">Any</option>
-              <option value="male">Male</option>
-              <option value="female">Female</option>
-            </select>
-          </div>
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium mb-1">Additional eligibility requirements</label>
-            <textarea
-              name="eligibility.other"
-              value={form.eligibility.other}
+      <form onSubmit={handleSubmit} className="space-y-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="grid gap-4 sm:grid-cols-2">
+          {/* Title */}
+          <div className="sm:col-span-2">
+            <label className={labelClass}>Title *</label>
+            <input
+              name="title"
+              value={form.title}
               onChange={handleChange}
-              className="w-full p-2 border rounded"
-              rows={3}
-              placeholder="State any other requirements applicants must meet, such as age, GPA, work experience, or required documents."
+              required
+              className={inputClass}
+              placeholder="e.g. Fully Funded Master's Scholarship in AI 2026"
             />
           </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Country</label>
-            <input name="country" value={form.country} onChange={handleChange} className="w-full p-2 border rounded" />
+
+          {/* Short Description */}
+          <div className="sm:col-span-2">
+            <label className={labelClass}>Short Summary</label>
+            <input
+              name="shortDescription"
+              value={form.shortDescription}
+              onChange={handleChange}
+              className={inputClass}
+              placeholder="Brief 1-2 sentence overview for cards"
+            />
           </div>
+
+          {/* Type */}
           <div>
-            <label className="block text-sm font-medium mb-1">Application URL *</label>
-            <input name="applicationUrl" type="url" value={form.applicationUrl} onChange={handleChange} required className="w-full p-2 border rounded" />
+            <label className={labelClass}>Opportunity Type *</label>
+            <select name="type" value={form.type} onChange={handleChange} className={inputClass}>
+              {OPPORTUNITY_TYPES.map((t) => (
+                <option key={t.value} value={t.value}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
           </div>
+
+          {/* Category */}
           <div>
-            <label className="block text-sm font-medium mb-1">Deadline *</label>
-            <input name="deadline" type="date" value={form.deadline} onChange={handleChange} required className="w-full p-2 border rounded" />
+            <label className={labelClass}>Category *</label>
+            <input
+              name="category"
+              value={form.category}
+              onChange={handleChange}
+              required
+              className={inputClass}
+              placeholder="e.g. Computer Science / Technology"
+            />
           </div>
+
+          {/* Organization */}
           <div>
-            <label className="block text-sm font-medium mb-1">Status</label>
-            <select name="status" value={form.status} onChange={handleChange} className="w-full p-2 border rounded">
-              <option value="draft">Draft</option>
+            <label className={labelClass}>Host Organization / Institution *</label>
+            <input
+              name="organization"
+              value={form.organization}
+              onChange={handleChange}
+              required
+              className={inputClass}
+              placeholder="e.g. University of Oxford / Google"
+            />
+          </div>
+
+          {/* Funding Type */}
+          <div>
+            <label className={labelClass}>Funding Status</label>
+            <select name="fundingType" value={form.fundingType} onChange={handleChange} className={inputClass}>
+              <option value="fully_funded">Fully Funded</option>
+              <option value="partially_funded">Partially Funded</option>
+              <option value="tuition_only">Tuition Only</option>
+              <option value="stipend">Stipend Provided</option>
+              <option value="paid">Paid Opportunity</option>
+              <option value="no_funding">Unfunded</option>
+              <option value="other">Other / See Description</option>
+            </select>
+          </div>
+
+          {/* Country & Region */}
+          <div>
+            <label className={labelClass}>Country</label>
+            <input
+              name="country"
+              value={form.country}
+              onChange={handleChange}
+              className={inputClass}
+              placeholder="e.g. Canada, Germany, Worldwide"
+            />
+          </div>
+
+          <div>
+            <label className={labelClass}>Region</label>
+            <select name="region" value={form.region} onChange={handleChange} className={inputClass}>
+              <option value="Worldwide">Worldwide</option>
+              <option value="Africa">Africa</option>
+              <option value="Europe">Europe</option>
+              <option value="North America">North America</option>
+              <option value="South America">South America</option>
+              <option value="Asia">Asia</option>
+              <option value="Middle East">Middle East</option>
+              <option value="Oceania">Oceania</option>
+            </select>
+          </div>
+
+          {/* Degree Levels & Fields */}
+          <div>
+            <label className={labelClass}>Degree Levels (comma separated)</label>
+            <input
+              name="degreeLevels"
+              value={form.degreeLevels}
+              onChange={handleChange}
+              className={inputClass}
+              placeholder="undergraduate, graduate, phd"
+            />
+          </div>
+
+          <div>
+            <label className={labelClass}>Fields of Study (comma separated)</label>
+            <input
+              name="fieldsOfStudy"
+              value={form.fieldsOfStudy}
+              onChange={handleChange}
+              className={inputClass}
+              placeholder="Computer Science, Engineering, Medicine"
+            />
+          </div>
+
+          {/* Description */}
+          <div className="sm:col-span-2">
+            <label className={labelClass}>Detailed Description *</label>
+            <textarea
+              name="description"
+              value={form.description}
+              onChange={handleChange}
+              required
+              rows={6}
+              className={inputClass}
+            />
+          </div>
+
+          {/* Application URL & Official Website */}
+          <div>
+            <label className={labelClass}>Official Application URL *</label>
+            <input
+              name="applicationUrl"
+              type="url"
+              value={form.applicationUrl}
+              onChange={handleChange}
+              required
+              className={inputClass}
+              placeholder="https://..."
+            />
+          </div>
+
+          <div>
+            <label className={labelClass}>Official Host Website</label>
+            <input
+              name="officialWebsite"
+              type="url"
+              value={form.officialWebsite}
+              onChange={handleChange}
+              className={inputClass}
+              placeholder="https://..."
+            />
+          </div>
+
+          {/* Deadline */}
+          <div>
+            <label className={labelClass}>Deadline *</label>
+            <input
+              name="deadline"
+              type="date"
+              value={form.deadline}
+              onChange={handleChange}
+              required
+              className={inputClass}
+            />
+          </div>
+
+          {/* Verification Status */}
+          <div>
+            <label className={labelClass}>Verification Status</label>
+            <select name="verificationStatus" value={form.verificationStatus} onChange={handleChange} className={inputClass}>
+              <option value="verified">Verified (Displays ✓ Badge)</option>
+              <option value="official_source">Official Source</option>
+              <option value="pending">Pending Moderation</option>
+              <option value="unverified">Unverified</option>
+              <option value="rejected">Rejected</option>
+            </select>
+          </div>
+
+          {/* Status & Featured */}
+          <div>
+            <label className={labelClass}>Publication Status</label>
+            <select name="status" value={form.status} onChange={handleChange} className={inputClass}>
               <option value="published">Published</option>
+              <option value="draft">Draft</option>
               <option value="expired">Expired</option>
             </select>
           </div>
-          <div className="flex items-center gap-2">
-            <input type="checkbox" name="featured" checked={form.featured} onChange={handleChange} className="h-5 w-5" />
-            <label className="text-sm">Featured</label>
+
+          <div className="flex items-center gap-4 pt-5">
+            <label className="flex cursor-pointer items-center gap-2 text-xs font-bold text-slate-700">
+              <input
+                type="checkbox"
+                name="isRemote"
+                checked={form.isRemote}
+                onChange={handleChange}
+                className="h-4 w-4 rounded text-emerald-600"
+              />
+              Fully Remote
+            </label>
+
+            <label className="flex cursor-pointer items-center gap-2 text-xs font-bold text-slate-700">
+              <input
+                type="checkbox"
+                name="featured"
+                checked={form.featured}
+                onChange={handleChange}
+                className="h-4 w-4 rounded text-emerald-600"
+              />
+              Featured Highlight
+            </label>
           </div>
 
-          {/* Image upload */}
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium mb-1">Banner Image (optional)</label>
+          {/* Image Upload */}
+          <div className="sm:col-span-2 border-t border-slate-100 pt-4">
+            <label className={labelClass}>Banner Image (Optional)</label>
             <input
               type="file"
               accept="image/*"
               onChange={(e) => {
                 const file = e.target.files[0];
                 if (file) {
-                  setForm(prev => ({
+                  setForm((prev) => ({
                     ...prev,
                     imageFile: file,
                     imagePreview: URL.createObjectURL(file),
                   }));
                 }
               }}
-              className="w-full p-2 border rounded"
+              className="w-full text-xs text-slate-500"
             />
             {form.imagePreview && (
-              <img src={form.imagePreview} alt="New preview" className="mt-2 h-40 rounded object-cover" />
+              <img src={form.imagePreview} alt="Preview" className="mt-2 h-32 rounded-xl object-cover" />
             )}
             {!form.imageFile && form.image && (
-              <div className="mt-2">
-                <p className="text-sm text-gray-500 mb-1">Current image:</p>
-                <img src={form.image} alt="Current banner" className="h-40 rounded object-cover" />
-              </div>
+              <img src={form.image} alt="Current banner" className="mt-2 h-32 rounded-xl object-cover" />
             )}
           </div>
         </div>
@@ -271,9 +445,9 @@ export default function OpportunityForm() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-primary-500 hover:bg-primary-600 text-green-500 py-3 rounded-lg font-medium transition disabled:opacity-50"
+          className="w-full rounded-xl bg-gradient-to-r from-[#0a2b3c] to-[#1c9c4d] py-3.5 text-xs font-black text-white shadow-lg transition hover:brightness-110 disabled:opacity-50"
         >
-          {loading ? 'Saving...' : isEditing ? 'Update Opportunity' : 'Create Opportunity'}
+          {loading ? "Saving Opportunity..." : isEditing ? "Update Opportunity" : "Create Opportunity"}
         </button>
       </form>
     </div>

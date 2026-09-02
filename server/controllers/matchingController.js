@@ -1,40 +1,43 @@
 import User from '../models/User.js';
-import Opportunity from '../models/Opportunity.js';
-import calculateMatch from '../utils/matchScore.js';
+import { getUserRecommendations } from '../services/recommendationService.js';
 
 // @desc    Get personalized recommendations for the logged-in user
 // @route   GET /api/matching/recommendations
 // @access  Private
 export const getRecommendations = async (req, res) => {
   try {
+    const result = await getUserRecommendations(req.user.id);
+    res.json(result);
+  } catch (error) {
+    console.error('getRecommendations error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// @desc    Dismiss / hide an opportunity (mark as "not interested")
+// @route   POST /api/matching/dismiss/:id
+// @access  Private
+export const dismissOpportunity = async (req, res) => {
+  try {
+    const { id } = req.params;
     const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
 
-    // Get all published opportunities that haven't expired. New users should
-    // still see useful opportunities while they complete their profile.
-    const opportunities = await Opportunity.find({
-      status: 'published',
-      deadline: { $gt: new Date() },
-    }).sort({ deadline: 1 });
-
-    if (!user.profile?.educationLevel) {
-      return res.json({ recommendations: opportunities.slice(0, 6) });
+    if (!user.profile) {
+      user.profile = {};
+    }
+    if (!user.profile.hiddenOpportunities) {
+      user.profile.hiddenOpportunities = [];
     }
 
-    // Score each one
-    const scored = opportunities
-      .map(opp => {
-        const matchScore = calculateMatch(user.profile, opp);
-        return { ...opp.toObject(), matchScore };
-      })
-      .filter(opp => opp.matchScore >= 40) // only decent matches
-      .sort((a, b) => b.matchScore - a.matchScore)
-      .slice(0, 20); // top 20
+    if (!user.profile.hiddenOpportunities.includes(id)) {
+      user.profile.hiddenOpportunities.push(id);
+      await user.save();
+    }
 
-    // A partial profile can produce no 40%+ matches. Fall back to current
-    // opportunities so the dashboard is never an empty dead end.
-    res.json({ recommendations: scored.length ? scored : opportunities.slice(0, 6) });
+    res.json({ message: 'Opportunity marked as not interested', dismissedId: id });
   } catch (error) {
-    console.error(error);
+    console.error('dismissOpportunity error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };

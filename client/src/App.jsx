@@ -24,6 +24,8 @@ import TermsAndConditions from "./Pages/TermsAndConditions";
 import AdminDashboard from "./Pages/admin/Dashboard";
 import AdminOpportunities from "./Pages/admin/Opportunities";
 import OpportunityForm from "./Pages/admin/OpportunityForm";
+import VerificationQueue from "./Pages/admin/VerificationQueue";
+import AdminSources from "./Pages/admin/Sources";
 import AdminUsers from "./Pages/admin/users";
 import AdminFeedback from "./Pages/admin/Feedback";
 import AdminReports from "./Pages/admin/Reports";
@@ -38,7 +40,7 @@ function App() {
 
           <main className="flex-1">
             <Routes>
-              {/* Public */}
+              {/* Public Discovery Routes */}
               <Route path="/" element={<Home />} />
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
@@ -47,7 +49,7 @@ function App() {
               <Route path="/privacy" element={<PrivacyPolicy />} />
               <Route path="/terms" element={<TermsAndConditions />} />
 
-              {/* User */}
+              {/* User Protected Routes */}
               <Route
                 path="/dashboard"
                 element={
@@ -97,7 +99,8 @@ function App() {
                 }
               />
               <Route path="/verify-email" element={<VerifyEmail />} />
-              {/* Admin (sidebar layout) */}
+
+              {/* Admin Protected Routes */}
               <Route
                 path="/admin"
                 element={
@@ -108,6 +111,8 @@ function App() {
               >
                 <Route index element={<AdminDashboard />} />
                 <Route path="opportunities" element={<AdminOpportunities />} />
+                <Route path="verification" element={<VerificationQueue />} />
+                <Route path="sources" element={<AdminSources />} />
                 <Route
                   path="opportunities/create"
                   element={<OpportunityForm />}

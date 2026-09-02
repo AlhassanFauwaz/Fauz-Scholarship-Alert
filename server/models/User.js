@@ -8,48 +8,42 @@ const userSchema = new mongoose.Schema({
     trim: true,
   },
   email: {
-  type: String,
-  required: [true, "Email is required"],
-  unique: true,
-  lowercase: true,
-  trim: true,
-  maxlength: [254, "Email cannot exceed 254 characters"],
-  match: [
-    /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*\.[a-zA-Z]{2,}$/,
-    "Please provide a valid email address",
-  ],
-},
-  phone: {
-  type: String,
-  default: '',
-  trim: true,
-  minlength: [10, 'Phone number must be exactly 10 digits'],
-  maxlength: [10, 'Phone number must be exactly 10 digits'],
-  match: [
-    /^0(?:20|23|24|25|26|27|28|50|53|54|55|59)\d{7}$/,
-    'Please provide a valid Ghanaian phone number'
-  ],
-},
-  password: {
-  type: String,
-  required: [true, 'Password is required'],
-  minlength: [8, 'Password must be at least 8 characters long'],
-  maxlength: [128, 'Password cannot exceed 128 characters'],
-  select: false,
-  trim: false,
-  validate: {
-    validator: function (value) {
-      return (
-        /[A-Z]/.test(value) &&
-        /[a-z]/.test(value) &&
-        /\d/.test(value) &&
-        /[^A-Za-z0-9]/.test(value)
-      );
-    },
-    message:
-      'Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character',
+    type: String,
+    required: [true, 'Email is required'],
+    unique: true,
+    lowercase: true,
+    trim: true,
+    maxlength: [254, 'Email cannot exceed 254 characters'],
+    match: [
+      /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*\.[a-zA-Z]{2,}$/,
+      'Please provide a valid email address',
+    ],
   },
-},
+  phone: {
+    type: String,
+    default: '',
+    trim: true,
+  },
+  password: {
+    type: String,
+    required: [true, 'Password is required'],
+    minlength: [8, 'Password must be at least 8 characters long'],
+    maxlength: [128, 'Password cannot exceed 128 characters'],
+    select: false,
+    trim: false,
+    validate: {
+      validator: function (value) {
+        return (
+          /[A-Z]/.test(value) &&
+          /[a-z]/.test(value) &&
+          /\d/.test(value) &&
+          /[^A-Za-z0-9]/.test(value)
+        );
+      },
+      message:
+        'Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character',
+    },
+  },
   role: {
     type: String,
     enum: ['user', 'admin', 'content-manager'],
@@ -72,19 +66,70 @@ const userSchema = new mongoose.Schema({
     institution: String,
     educationLevel: {
       type: String,
-      enum: ['highschool', 'undergraduate', 'graduate', 'postgraduate', 'phd', 'other'],
+      enum: ['highschool', 'diploma', 'undergraduate', 'graduate', 'postgraduate', 'mphil', 'phd', 'postdoctoral', 'professional', 'other', ''],
     },
+    degree: String,
     fieldOfStudy: String,
     graduationYear: Number,
     gpa: Number,
     country: String,
+    nationality: String,
     city: String,
-    interests: [String],
-    preferredOpportunityTypes: [String],
-    preferredCountries: [String],
-    preferredFields: [String],
-    preferredFunding: [String],
-    keywords: [String],
+    dateOfBirth: Date,
+    employmentStatus: {
+      type: String,
+      enum: ['student', 'employed', 'unemployed', 'self-employed', 'other', ''],
+      default: 'student',
+    },
+    workExperience: String,
+    yearsOfExperience: {
+      type: Number,
+      default: 0,
+    },
+    skills: {
+      type: [String],
+      default: [],
+    },
+    certifications: {
+      type: [String],
+      default: [],
+    },
+    interests: {
+      type: [String],
+      default: [],
+    },
+    preferredOpportunityTypes: {
+      type: [String],
+      default: [],
+    },
+    preferredCountries: {
+      type: [String],
+      default: [],
+    },
+    preferredRegions: {
+      type: [String],
+      default: [],
+    },
+    preferredFields: {
+      type: [String],
+      default: [],
+    },
+    preferredFunding: {
+      type: [String],
+      default: [],
+    },
+    isRemoteOnly: {
+      type: Boolean,
+      default: false,
+    },
+    keywords: {
+      type: [String],
+      default: [],
+    },
+    hiddenOpportunities: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Opportunity',
+    }],
   },
   notificationPreferences: {
     email: { type: Boolean, default: true },

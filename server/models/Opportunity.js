@@ -1,43 +1,165 @@
 import mongoose from 'mongoose';
 
+const generateSlug = (title) => {
+  if (!title) return '';
+  const base = title
+    .toLowerCase()
+    .replace(/[^\w\s-]/g, '')
+    .trim()
+    .replace(/\s+/g, '-');
+  const randomSuffix = Math.random().toString(36).substring(2, 7);
+  return `${base.substring(0, 80)}-${randomSuffix}`;
+};
+
 const opportunitySchema = new mongoose.Schema({
   title: {
     type: String,
     required: [true, 'Title is required'],
     trim: true,
   },
+  slug: {
+    type: String,
+    trim: true,
+    lowercase: true,
+    index: true,
+  },
+  shortDescription: {
+    type: String,
+    trim: true,
+  },
+  description: {
+    type: String,
+    required: [true, 'Description is required'],
+  },
   type: {
     type: String,
     enum: [
       'scholarship',
       'internship',
-      'fellowship',
       'grant',
-      'competition',
+      'fellowship',
+      'job',
       'research',
       'training',
-      'conference',
+      'competition',
       'exchange',
+      'graduate_programme',
+      'volunteer',
+      'conference',
+      'entrepreneurship',
       'funding',
       'other',
     ],
     required: [true, 'Opportunity type is required'],
+    default: 'scholarship',
   },
   category: {
     type: String,
     required: [true, 'Category is required'],
+    default: 'General',
   },
   organization: {
     type: String,
     required: [true, 'Organization is required'],
+    trim: true,
+  },
+  provider: {
+    type: String,
+    trim: true,
   },
   image: {
-  type: String,
-  default: 'client/public/scholarship.png',
-},
-  description: {
     type: String,
-    required: [true, 'Description is required'],
+    default: 'client/public/scholarship.png',
+  },
+  country: {
+    type: String,
+    trim: true,
+  },
+  region: {
+    type: String,
+    enum: [
+      'Africa',
+      'Europe',
+      'North America',
+      'South America',
+      'Asia',
+      'Oceania',
+      'Middle East',
+      'Worldwide',
+      'Other',
+      '',
+    ],
+    default: 'Worldwide',
+  },
+  city: {
+    type: String,
+    trim: true,
+  },
+  isRemote: {
+    type: Boolean,
+    default: false,
+  },
+  eligibleCountries: {
+    type: [String],
+    default: [],
+  },
+  eligibleRegions: {
+    type: [String],
+    default: [],
+  },
+  degreeLevels: {
+    type: [String],
+    default: [],
+  },
+  fieldsOfStudy: {
+    type: [String],
+    default: [],
+  },
+  subjects: {
+    type: [String],
+    default: [],
+  },
+  minimumQualification: {
+    type: String,
+    trim: true,
+  },
+  maximumQualification: {
+    type: String,
+    trim: true,
+  },
+  experienceRequirement: {
+    type: String,
+    trim: true,
+  },
+  skills: {
+    type: [String],
+    default: [],
+  },
+  fundingType: {
+    type: String,
+    enum: [
+      'fully_funded',
+      'partially_funded',
+      'tuition_only',
+      'stipend',
+      'no_funding',
+      'paid',
+      'unpaid',
+      'other',
+      '',
+    ],
+    default: 'other',
+  },
+  fundingAmount: {
+    type: String,
+    trim: true,
+  },
+  currency: {
+    type: String,
+    default: 'USD',
+  },
+  benefits: {
+    type: String,
   },
   eligibility: {
     minEducationLevel: String,
@@ -56,13 +178,41 @@ const opportunitySchema = new mongoose.Schema({
     instructions: String,
     applicationFee: Number,
   },
-  benefits: String,
-  country: String,
+  documentsRequired: {
+    type: [String],
+    default: [],
+  },
+  tags: {
+    type: [String],
+    default: [],
+  },
+  startDate: Date,
+  endDate: Date,
+  duration: {
+    type: String,
+    trim: true,
+  },
   applicationUrl: {
     type: String,
     required: [true, 'Application URL is required'],
+    trim: true,
   },
-  sourceUrl: String,
+  officialWebsite: {
+    type: String,
+    trim: true,
+  },
+  sourceUrl: {
+    type: String,
+    trim: true,
+  },
+  sourceName: {
+    type: String,
+    trim: true,
+  },
+  sourceId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'OpportunitySource',
+  },
   openingDate: Date,
   deadline: {
     type: Date,
@@ -70,22 +220,48 @@ const opportunitySchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['draft', 'published', 'expired'],
-    default: 'draft',
+    enum: ['draft', 'published', 'expired', 'archived'],
+    default: 'published',
   },
   verificationStatus: {
     type: String,
-    enum: ['unverified', 'pending', 'verified', 'rejected'],
+    enum: ['unverified', 'pending', 'verified', 'official_source', 'rejected', 'expired'],
     default: 'unverified',
   },
+  verifiedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+  },
+  verifiedAt: Date,
+  verificationNotes: String,
   featured: {
     type: Boolean,
     default: false,
   },
+  viewsCount: {
+    type: Number,
+    default: 0,
+  },
+  savesCount: {
+    type: Number,
+    default: 0,
+  },
+  clicksCount: {
+    type: Number,
+    default: 0,
+  },
+  dateDiscovered: {
+    type: Date,
+    default: Date.now,
+  },
+  datePublished: {
+    type: Date,
+    default: Date.now,
+  },
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: true,
+    required: false,
   },
   createdAt: {
     type: Date,
@@ -97,13 +273,41 @@ const opportunitySchema = new mongoose.Schema({
   },
 });
 
-// Text index for search
-opportunitySchema.index({ title: 'text', description: 'text', organization: 'text' });
-
-// Update the `updatedAt` field before saving
+// Update the `updatedAt` field and generate slug before saving
 opportunitySchema.pre('save', function () {
   this.updatedAt = Date.now();
+  if (!this.slug) {
+    this.slug = generateSlug(this.title);
+  }
+  // Synchronize legacy and new eligibility fields if one is provided
+  if (this.eligibility?.fieldOfStudy && (!this.fieldsOfStudy || this.fieldsOfStudy.length === 0)) {
+    this.fieldsOfStudy = [this.eligibility.fieldOfStudy];
+  }
+  if (this.eligibility?.countryEligibility && (!this.eligibleCountries || this.eligibleCountries.length === 0)) {
+    this.eligibleCountries = this.eligibility.countryEligibility;
+  }
+  if (this.eligibility?.minEducationLevel && (!this.degreeLevels || this.degreeLevels.length === 0)) {
+    this.degreeLevels = [this.eligibility.minEducationLevel];
+  }
 });
+
+// Compound and text indexes for fast search & filtering
+opportunitySchema.index({
+  title: 'text',
+  description: 'text',
+  shortDescription: 'text',
+  organization: 'text',
+  fieldsOfStudy: 'text',
+  tags: 'text',
+});
+
+opportunitySchema.index({ status: 1, deadline: 1 });
+opportunitySchema.index({ status: 1, type: 1, createdAt: -1 });
+opportunitySchema.index({ status: 1, country: 1 });
+opportunitySchema.index({ status: 1, isRemote: 1 });
+opportunitySchema.index({ status: 1, featured: 1 });
+opportunitySchema.index({ verificationStatus: 1 });
+opportunitySchema.index({ dateDiscovered: -1 });
 
 const Opportunity = mongoose.model('Opportunity', opportunitySchema);
 
