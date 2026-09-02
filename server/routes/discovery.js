@@ -6,7 +6,7 @@ import {
   blockCandidateSource,
 } from '../controllers/discoveryController.js';
 import auth from '../middleware/auth.js';
-import admin from '../middleware/admin.js';
+import { admin } from '../middleware/admin.js';
 
 const router = express.Router();
 
