@@ -14,10 +14,12 @@ import matchingRoutes from "./routes/matching.js";
 import savedOpportunityRoutes from "./routes/savedOpportunities.js";
 import notificationRoutes from "./routes/notifications.js";
 import adminRoutes from "./routes/admin.js";
+import discoveryRoutes from "./routes/discovery.js";
 import feedbackRoutes from "./routes/feedback.js";
 import subscriptionRoutes from "./routes/subscriptions.js";
 import { startDeadlineScheduler } from "./jobs/deadlineScheduler.js";
-import { startCollectorScheduler } from "./jobs/collectorScheduler.js";
+import { initCollectorScheduler } from "./jobs/collectorScheduler.js";
+import { initDiscoveryScheduler } from "./jobs/discoveryScheduler.js";
 import { seedInitialSources } from "./services/collectorService.js";
 
 const app = express();
@@ -40,7 +42,7 @@ app.use(
       if (allowedOrigins.some((o) => origin === o || origin.startsWith(o))) {
         return callback(null, true);
       }
-      return callback(null, true); // Permissive in development/production transition
+      return callback(null, true);
     },
     credentials: true,
   })
@@ -50,7 +52,7 @@ app.use(express.json());
 app.use(morgan("dev"));
 
 app.get("/", (req, res) => {
-  res.send("Fauz Opportunity Alert API is running...");
+  res.send("Fauz Global Opportunity Platform API is running...");
 });
 
 app.use("/api/auth", authRoutes);
@@ -61,6 +63,7 @@ app.use("/api/matching", matchingRoutes);
 app.use("/api/saved-opportunities", savedOpportunityRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/discovery", discoveryRoutes);
 app.use("/api/feedback", feedbackRoutes);
 app.use("/api/subscriptions", subscriptionRoutes);
 
@@ -76,10 +79,11 @@ const startServer = async () => {
     await connectDB();
     await seedInitialSources();
     startDeadlineScheduler();
-    startCollectorScheduler();
+    initCollectorScheduler();
+    initDiscoveryScheduler();
 
     app.listen(PORT, "0.0.0.0", () => {
-      console.log(`Server running on port ${PORT}`);
+      console.log(`Global Opportunity Platform API running on port ${PORT}`);
     });
   } catch (error) {
     console.error("Server startup failed:", error.message);

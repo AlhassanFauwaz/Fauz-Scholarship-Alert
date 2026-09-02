@@ -7,6 +7,8 @@ export default function VerificationQueue() {
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState(null);
   const [message, setMessage] = useState("");
+  const [mergeModalOpp, setMergeModalOpp] = useState(null);
+  const [targetMasterId, setTargetMasterId] = useState("");
 
   const fetchPending = async () => {
     setLoading(true);
@@ -43,6 +45,24 @@ export default function VerificationQueue() {
     }
   };
 
+  const handleMergeSubmit = async (e) => {
+    e.preventDefault();
+    if (!targetMasterId) return;
+
+    try {
+      await API.post(`/admin/opportunities/${mergeModalOpp._id}/merge`, {
+        targetMasterId,
+      });
+      setMessage("Opportunity citations merged into master record!");
+      setOpportunities((prev) => prev.filter((o) => o._id !== mergeModalOpp._id));
+      setMergeModalOpp(null);
+      setTargetMasterId("");
+      setTimeout(() => setMessage(""), 3000);
+    } catch (err) {
+      alert(err.response?.data?.message || "Merge failed");
+    }
+  };
+
   return (
     <div className="space-y-6 p-1">
       <div>
@@ -53,7 +73,7 @@ export default function VerificationQueue() {
           Opportunity Verification Queue
         </h1>
         <p className="mt-1 text-xs text-slate-500">
-          Review newly discovered opportunities from internet sources before publishing them globally.
+          Review newly discovered opportunities, evaluate quality and trust scores, or merge duplicate citations.
         </p>
       </div>
 
@@ -95,6 +115,9 @@ export default function VerificationQueue() {
                     <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-[10px] font-bold text-amber-700">
                       Pending Verification
                     </span>
+                    <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold text-emerald-800">
+                      Quality: {opp.qualityScore || 75}/100
+                    </span>
                     {opp.sourceName && (
                       <span className="text-[11px] text-slate-400">
                         Source: <span className="font-semibold text-slate-600">{opp.sourceName}</span>
@@ -112,6 +135,14 @@ export default function VerificationQueue() {
                     <span>
                       ⏰ Deadline: {opp.deadline ? new Date(opp.deadline).toLocaleDateString() : "N/A"}
                     </span>
+                    <a
+                      href={opp.applicationUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-emerald-600 hover:underline font-bold"
+                    >
+                      Application Link ↗
+                    </a>
                   </div>
                 </div>
 
@@ -122,6 +153,13 @@ export default function VerificationQueue() {
                     className="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-700 disabled:opacity-50"
                   >
                     ✓ Verify & Publish
+                  </button>
+
+                  <button
+                    onClick={() => setMergeModalOpp(opp)}
+                    className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-bold text-sky-700 hover:bg-sky-100"
+                  >
+                    🔗 Merge as Duplicate
                   </button>
 
                   <button
@@ -141,6 +179,52 @@ export default function VerificationQueue() {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Merge Modal */}
+      {mergeModalOpp && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h2 className="text-base font-black text-[#0a2b3c]">Merge Duplicate Opportunity</h2>
+              <button onClick={() => setMergeModalOpp(null)} className="text-slate-400 font-bold">✕</button>
+            </div>
+
+            <p className="text-xs text-slate-600">
+              Merge this opportunity citation into a master opportunity record. The master record will retain all citations in <code className="font-mono bg-slate-100 px-1 py-0.5 rounded">sources[]</code>.
+            </p>
+
+            <form onSubmit={handleMergeSubmit} className="space-y-4 text-xs">
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">Target Master Opportunity ID (MongoDB ObjectId) *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. 64b8f... (24 hex characters)"
+                  value={targetMasterId}
+                  onChange={(e) => setTargetMasterId(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 outline-none focus:border-emerald-500 font-mono"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setMergeModalOpp(null)}
+                  className="rounded-xl border border-slate-200 px-4 py-2 font-bold text-slate-600"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="rounded-xl bg-sky-600 px-4 py-2 font-bold text-white shadow"
+                >
+                  Confirm Merge
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

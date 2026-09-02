@@ -22,6 +22,10 @@ export default function AdminSources() {
     name: "",
     websiteUrl: "",
     sourceType: "rss",
+    sourceCategory: "other",
+    region: "Worldwide",
+    priority: "normal",
+    trustScore: 75,
     rssUrl: "",
     apiEndpoint: "",
     defaultOpportunityType: "scholarship",
@@ -53,6 +57,10 @@ export default function AdminSources() {
       name: "",
       websiteUrl: "",
       sourceType: "rss",
+      sourceCategory: "other",
+      region: "Worldwide",
+      priority: "normal",
+      trustScore: 75,
       rssUrl: "",
       apiEndpoint: "",
       defaultOpportunityType: "scholarship",
@@ -70,6 +78,10 @@ export default function AdminSources() {
       name: src.name,
       websiteUrl: src.websiteUrl,
       sourceType: src.sourceType,
+      sourceCategory: src.sourceCategory || "other",
+      region: src.region || "Worldwide",
+      priority: src.priority || "normal",
+      trustScore: src.trustScore || 75,
       rssUrl: src.rssUrl || "",
       apiEndpoint: src.apiEndpoint || "",
       defaultOpportunityType: src.defaultOpportunityType || "scholarship",
@@ -144,10 +156,10 @@ export default function AdminSources() {
             Automation Engine
           </p>
           <h1 className="mt-1 text-3xl font-black text-[#0a2b3c]">
-            Opportunity Sources
+            Opportunity Sources Registry
           </h1>
           <p className="mt-1 text-xs text-slate-500">
-            Manage global RSS feeds, APIs, collection frequencies, and automatic synchronization health.
+            Manage global RSS feeds, APIs, collection frequencies, trust scores, and synchronization health.
           </p>
         </div>
 
@@ -181,8 +193,9 @@ export default function AdminSources() {
             <thead className="border-b border-slate-200 bg-slate-50 text-slate-700">
               <tr>
                 <th className="p-4 font-bold">Source Name</th>
-                <th className="p-4 font-bold">Type</th>
-                <th className="p-4 font-bold">Frequency</th>
+                <th className="p-4 font-bold">Category</th>
+                <th className="p-4 font-bold">Trust Score</th>
+                <th className="p-4 font-bold">Priority</th>
                 <th className="p-4 font-bold">Health</th>
                 <th className="p-4 font-bold">Last Sync</th>
                 <th className="p-4 font-bold">Found</th>
@@ -203,20 +216,24 @@ export default function AdminSources() {
                       {src.websiteUrl}
                     </a>
                   </td>
+                  <td className="p-4 capitalize text-slate-600 font-medium">
+                    {src.sourceCategory?.replace("_", " ") || "Other"}
+                  </td>
                   <td className="p-4">
-                    <span className="rounded bg-slate-100 px-2 py-1 uppercase font-bold text-slate-700">
-                      {src.sourceType}
+                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-bold text-emerald-800">
+                      🛡️ {src.trustScore || 75}/100
                     </span>
                   </td>
-                  <td className="p-4 text-slate-600 font-medium">{src.frequency}</td>
+                  <td className="p-4">
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${
+                      src.priority === "high" ? "bg-purple-100 text-purple-800" : "bg-slate-100 text-slate-700"
+                    }`}>
+                      {src.priority || "normal"}
+                    </span>
+                  </td>
                   <td className="p-4">{getStatusBadge(src.healthStatus)}</td>
                   <td className="p-4 text-slate-500">
                     {src.lastSyncAt ? new Date(src.lastSyncAt).toLocaleString() : "Never"}
-                    {src.lastErrorMessage && (
-                      <p className="mt-0.5 max-w-[180px] truncate text-[10px] text-red-500" title={src.lastErrorMessage}>
-                        {src.lastErrorMessage}
-                      </p>
-                    )}
                   </td>
                   <td className="p-4 font-bold text-slate-800">{src.opportunitiesFound || 0}</td>
                   <td className="p-4">
@@ -306,6 +323,27 @@ export default function AdminSources() {
                 </div>
 
                 <div>
+                  <label className="mb-1 block font-bold text-slate-700">Category</label>
+                  <select
+                    value={form.sourceCategory}
+                    onChange={(e) => setForm({ ...form, sourceCategory: e.target.value })}
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 outline-none focus:border-emerald-500"
+                  >
+                    <option value="university">University</option>
+                    <option value="government">Government Agency</option>
+                    <option value="international_org">International Org (UN/EU/WB)</option>
+                    <option value="foundation">Foundation</option>
+                    <option value="company">Company / Corporate</option>
+                    <option value="research_institution">Research Institution</option>
+                    <option value="aggregator">Aggregator Portal</option>
+                    <option value="ngo">NGO</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
                   <label className="mb-1 block font-bold text-slate-700">Sync Frequency</label>
                   <select
                     value={form.frequency}
@@ -317,6 +355,19 @@ export default function AdminSources() {
                         {f.label}
                       </option>
                     ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-1 block font-bold text-slate-700">Priority Level</label>
+                  <select
+                    value={form.priority}
+                    onChange={(e) => setForm({ ...form, priority: e.target.value })}
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 outline-none focus:border-emerald-500"
+                  >
+                    <option value="high">High (Polled Frequently)</option>
+                    <option value="normal">Normal</option>
+                    <option value="low">Low</option>
                   </select>
                 </div>
               </div>
@@ -345,28 +396,6 @@ export default function AdminSources() {
                   />
                 </div>
               )}
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="mb-1 block font-bold text-slate-700">Default Category</label>
-                  <input
-                    type="text"
-                    value={form.defaultCategory}
-                    onChange={(e) => setForm({ ...form, defaultCategory: e.target.value })}
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 outline-none focus:border-emerald-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-1 block font-bold text-slate-700">Default Country</label>
-                  <input
-                    type="text"
-                    value={form.defaultCountry}
-                    onChange={(e) => setForm({ ...form, defaultCountry: e.target.value })}
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 outline-none focus:border-emerald-500"
-                  />
-                </div>
-              </div>
 
               <div className="space-y-2 border-t border-slate-100 pt-3">
                 <label className="flex cursor-pointer items-center gap-2 font-semibold text-slate-700">

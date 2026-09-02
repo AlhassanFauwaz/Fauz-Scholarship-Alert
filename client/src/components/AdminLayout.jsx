@@ -2,9 +2,11 @@ import { NavLink, Outlet } from "react-router-dom";
 
 const sidebarLinks = [
   { to: "/admin", label: "Dashboard", icon: "dashboard", end: true, color: "text-emerald-300" },
-  { to: "/admin/opportunities", label: "Opportunities", icon: "opportunities", color: "text-sky-300" },
+  { to: "/admin/discovery", label: "Global Discovery", icon: "discovery", color: "text-sky-300" },
+  { to: "/admin/opportunities", label: "Opportunities", icon: "opportunities", color: "text-teal-300" },
   { to: "/admin/verification", label: "Verification Queue", icon: "verification", color: "text-amber-300" },
-  { to: "/admin/sources", label: "Opportunity Sources", icon: "sources", color: "text-teal-300" },
+  { to: "/admin/sources", label: "Sources Registry", icon: "sources", color: "text-emerald-400" },
+  { to: "/admin/ingestions", label: "Raw Ingestion Stream", icon: "ingestions", color: "text-indigo-300" },
   { to: "/admin/users", label: "Users", icon: "users", color: "text-violet-300" },
   { to: "/admin/feedback", label: "Feedback", icon: "feedback", color: "text-rose-300" },
   { to: "/admin/reports", label: "Reports", icon: "reports", color: "text-cyan-300" },
@@ -13,9 +15,11 @@ const sidebarLinks = [
 function AdminIcon({ name }) {
   const paths = {
     dashboard: "M4 4h6v6H4V4Zm10 0h6v6h-6V4ZM4 14h6v6H4v-6Zm10 0h6v6h-6v-6Z",
+    discovery: "M12 2a10 10 0 100 20 10 10 0 000-20zm0 18a8 8 0 110-16 8 8 0 010 16zm-1-13h2v6h-2zm0 8h2v2h-2z",
     opportunities: "M9 5h10M9 12h10M9 19h10M5 5h.01M5 12h.01M5 19h.01",
     verification: "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z",
     sources: "M13 10V3L4 14h7v7l9-11h-7z",
+    ingestions: "M4 6h16M4 12h16M4 18h7",
     users: "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2m8-10a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm3 4a4 4 0 0 1 3 3.9V21",
     feedback: "M20 15a4 4 0 0 1-4 4H8l-4 3v-7a4 4 0 0 1-2-3.5v-5A4 4 0 0 1 6 3h10a4 4 0 0 1 4 4v8Z",
     reports: "M4 19V5m0 14h16M8 16v-4m4 4V8m4 8v-6",

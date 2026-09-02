@@ -1,10 +1,12 @@
 import User from '../models/User.js';
 import Opportunity from '../models/Opportunity.js';
 import OpportunitySource from '../models/OpportunitySource.js';
+import OpportunityIngestion from '../models/OpportunityIngestion.js';
 import Notification from '../models/Notification.js';
 import Subscription from '../models/Subscription.js';
 import SavedOpportunity from '../models/SavedOpportunity.js';
 import Feedback from '../models/Feedback.js';
+import { mergeOpportunityIntoMaster } from '../services/duplicateService.js';
 
 // @desc    Get comprehensive admin dashboard stats
 // @route   GET /api/admin/dashboard
@@ -161,6 +163,65 @@ export const verifyOpportunity = async (req, res) => {
     res.json({ opportunity });
   } catch (error) {
     console.error('verifyOpportunity error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// @desc    Merge duplicate opportunity into master opportunity
+// @route   POST /api/admin/opportunities/:id/merge
+// @access  Private/Admin
+export const mergeOpportunities = async (req, res) => {
+  try {
+    const { targetMasterId } = req.body;
+    const duplicateOpp = await Opportunity.findById(req.params.id);
+    const masterOpp = await Opportunity.findById(targetMasterId);
+
+    if (!duplicateOpp || !masterOpp) {
+      return res.status(404).json({ message: 'One or both opportunities not found' });
+    }
+
+    await mergeOpportunityIntoMaster(masterOpp, duplicateOpp);
+    // Mark duplicate as archived/merged
+    duplicateOpp.status = 'archived';
+    duplicateOpp.verificationStatus = 'rejected';
+    duplicateOpp.verificationNotes = `Merged into master opportunity: ${masterOpp._id}`;
+    await duplicateOpp.save();
+
+    res.json({ message: 'Opportunities merged successfully', masterOpportunity: masterOpp });
+  } catch (error) {
+    console.error('mergeOpportunities error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// @desc    Get raw ingestion audit logs
+// @route   GET /api/admin/ingestions
+// @access  Private/Admin
+export const getIngestions = async (req, res) => {
+  try {
+    const { status, page = 1, limit = 30 } = req.query;
+    const filter = {};
+    if (status) filter.processingStatus = status;
+
+    const skip = (Number(page) - 1) * Number(limit);
+    const [ingestions, total] = await Promise.all([
+      OpportunityIngestion.find(filter)
+        .sort({ retrievedAt: -1 })
+        .skip(skip)
+        .limit(Number(limit))
+        .populate('sourceId', 'name sourceType websiteUrl')
+        .populate('extractedOpportunityId', 'title slug status verificationStatus'),
+      OpportunityIngestion.countDocuments(filter),
+    ]);
+
+    res.json({
+      ingestions,
+      page: Number(page),
+      totalPages: Math.ceil(total / Number(limit)),
+      total,
+    });
+  } catch (error) {
+    console.error('getIngestions error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };

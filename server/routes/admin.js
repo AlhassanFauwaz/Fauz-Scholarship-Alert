@@ -3,6 +3,8 @@ import {
   getDashboardStats,
   getAdminOpportunities,
   verifyOpportunity,
+  mergeOpportunities,
+  getIngestions,
   getAdminUsers,
   getAdminUser,
   updateAdminUser,
@@ -23,6 +25,10 @@ router.get('/dashboard', getDashboardStats);
 // Opportunities
 router.get('/opportunities', getAdminOpportunities);
 router.put('/opportunities/:id/verify', verifyOpportunity);
+router.post('/opportunities/:id/merge', mergeOpportunities);
+
+// Raw Ingestion Auditing
+router.get('/ingestions', getIngestions);
 
 // Users
 router.get('/users', getAdminUsers);

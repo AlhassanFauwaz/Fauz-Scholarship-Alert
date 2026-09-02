@@ -1,37 +1,14 @@
-import axios from 'axios';
 import Opportunity from '../models/Opportunity.js';
 import OpportunitySource from '../models/OpportunitySource.js';
-import {
-  normalizeCountry,
-  normalizeFieldOfStudy,
-  normalizeDegreeLevel,
-  normalizeFundingType,
-  normalizeOpportunityType,
-} from './taxonomyService.js';
-import { findDuplicate } from './duplicateService.js';
+import OpportunityIngestion from '../models/OpportunityIngestion.js';
+import { collectFromRss } from '../collectors/rssCollector.js';
+import { collectFromApi } from '../collectors/apiCollector.js';
+import { collectFromWebsite } from '../collectors/websiteCollector.js';
+import { findDuplicate, mergeOpportunityIntoMaster } from './duplicateService.js';
+import { calculateQualityScore, detectSpamOrFraud } from './qualityService.js';
 import { createNotification } from '../utils/notifications.js';
 import User from '../models/User.js';
 import calculateMatch from '../utils/matchScore.js';
-
-/**
- * Clean HTML markup and extract plain text.
- */
-const stripHtml = (html) => {
-  if (!html) return '';
-  return html
-    .replace(/<!\[CDATA\[(.*?)\]\]>/gs, '$1')
-    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-    .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/\s+/g, ' ')
-    .trim();
-};
 
 /**
  * Parse an RSS or Atom XML string into structured opportunity objects.
@@ -54,17 +31,17 @@ export const parseXmlFeed = (xmlText, source) => {
       itemXml.match(/<pubDate[^>]*>([\s\S]*?)<\/pubDate>/i) ||
       itemXml.match(/<dc:date[^>]*>([\s\S]*?)<\/dc:date>/i);
 
-    const rawTitle = titleMatch ? stripHtml(titleMatch[1]) : '';
-    const rawLink = linkMatch ? stripHtml(linkMatch[1]) : '';
-    const rawDesc = descMatch ? stripHtml(descMatch[1]) : '';
-    const pubDate = pubDateMatch ? new Date(stripHtml(pubDateMatch[1])) : new Date();
+    const rawTitle = titleMatch ? titleMatch[1] : '';
+    const rawLink = linkMatch ? linkMatch[1] : '';
+    const rawDesc = descMatch ? descMatch[1] : '';
+    const pubDate = pubDateMatch ? new Date(pubDateMatch[1].replace(/<!\[CDATA\[(.*?)\]\]>/g, '$1')) : new Date();
 
     if (rawTitle && rawLink) {
       items.push({
         title: rawTitle,
-        applicationUrl: rawLink,
-        sourceUrl: rawLink,
-        description: rawDesc || rawTitle,
+        applicationUrl: rawLink.replace(/<!\[CDATA\[(.*?)\]\]>/g, '$1').trim(),
+        sourceUrl: rawLink.replace(/<!\[CDATA\[(.*?)\]\]>/g, '$1').trim(),
+        description: rawDesc,
         datePublished: isNaN(pubDate.getTime()) ? new Date() : pubDate,
       });
     }
@@ -85,16 +62,16 @@ export const parseXmlFeed = (xmlText, source) => {
         entryXml.match(/<updated[^>]*>([\s\S]*?)<\/updated>/i) ||
         entryXml.match(/<published[^>]*>([\s\S]*?)<\/published>/i);
 
-      const rawTitle = titleMatch ? stripHtml(titleMatch[1]) : '';
-      const rawLink = linkMatch ? stripHtml(linkMatch[1]) : '';
-      const rawSummary = summaryMatch ? stripHtml(summaryMatch[1]) : '';
-      const pubDate = updatedMatch ? new Date(stripHtml(updatedMatch[1])) : new Date();
+      const rawTitle = titleMatch ? titleMatch[1] : '';
+      const rawLink = linkMatch ? linkMatch[1] : '';
+      const rawSummary = summaryMatch ? summaryMatch[1] : '';
+      const pubDate = updatedMatch ? new Date(updatedMatch[1].replace(/<!\[CDATA\[(.*?)\]\]>/g, '$1')) : new Date();
 
       if (rawTitle && rawLink) {
         items.push({
           title: rawTitle,
-          applicationUrl: rawLink,
-          sourceUrl: rawLink,
+          applicationUrl: rawLink.replace(/<!\[CDATA\[(.*?)\]\]>/g, '$1').trim(),
+          sourceUrl: rawLink.replace(/<!\[CDATA\[(.*?)\]\]>/g, '$1').trim(),
           description: rawSummary || rawTitle,
           datePublished: isNaN(pubDate.getTime()) ? new Date() : pubDate,
         });
@@ -106,135 +83,124 @@ export const parseXmlFeed = (xmlText, source) => {
 };
 
 /**
- * Extract an estimated deadline from description text or assign a sensible default.
- */
-const detectDeadline = (text) => {
-  if (!text) {
-    const fallback = new Date();
-    fallback.setDate(fallback.getDate() + 45); // default 45 days
-    return fallback;
-  }
-
-  // Look for deadline keywords like "deadline: 15 October 2026", "closing date: 2026-11-30"
-  const patterns = [
-    /(?:deadline|closes?|closing date|due date)[:\s]+([A-Za-z]+\s+\d{1,2},?\s+\d{4})/i,
-    /(?:deadline|closes?|closing date|due date)[:\s]+(\d{1,2}\s+[A-Za-z]+\s+\d{4})/i,
-    /(?:deadline|closes?|closing date|due date)[:\s]+(\d{4}-\d{2}-\d{2})/i,
-  ];
-
-  for (const regex of patterns) {
-    const match = text.match(regex);
-    if (match && match[1]) {
-      const parsed = new Date(match[1]);
-      if (!isNaN(parsed.getTime()) && parsed > new Date()) {
-        return parsed;
-      }
-    }
-  }
-
-  const fallback = new Date();
-  fallback.setDate(fallback.getDate() + 45);
-  return fallback;
-};
-
-/**
- * Fetch and process opportunities from an OpportunitySource.
+ * Full Ingestion Pipeline for a single OpportunitySource.
  */
 export const syncSource = async (source) => {
-  try {
-    let rawItems = [];
+  const startTime = Date.now();
+  console.log(`📡 Ingestion starting for source: ${source.name} [${source.sourceType}]`);
 
-    if (source.sourceType === 'rss' && source.rssUrl) {
-      const response = await axios.get(source.rssUrl, {
-        timeout: 15000,
-        headers: {
-          'User-Agent': 'FauzOpportunityBot/2.0 (Discovery and Opportunity Aggregator)',
-          Accept: 'application/rss+xml, application/xml, text/xml, */*',
-        },
-      });
-      rawItems = parseXmlFeed(response.data, source);
-    } else if (source.sourceType === 'api' && source.apiEndpoint) {
-      const response = await axios.get(source.apiEndpoint, {
-        timeout: 15000,
-        headers: {
-          'User-Agent': 'FauzOpportunityBot/2.0 (Discovery and Opportunity Aggregator)',
-          Accept: 'application/json',
-        },
-      });
-      if (Array.isArray(response.data)) {
-        rawItems = response.data;
-      } else if (response.data?.opportunities || response.data?.items || response.data?.results) {
-        rawItems = response.data.opportunities || response.data.items || response.data.results;
-      }
+  try {
+    let collectionResult;
+
+    if (source.sourceType === 'rss') {
+      collectionResult = await collectFromRss(source);
+    } else if (source.sourceType === 'api') {
+      collectionResult = await collectFromApi(source);
+    } else {
+      collectionResult = await collectFromWebsite(source);
     }
+
+    const { rawPayload, opportunities: candidateOpportunities } = collectionResult;
 
     let createdCount = 0;
+    let mergedCount = 0;
+    let flaggedCount = 0;
 
-    for (const raw of rawItems) {
-      const title = raw.title?.trim();
-      const appUrl = raw.applicationUrl || raw.url || raw.link || source.websiteUrl;
-      if (!title || !appUrl) continue;
+    for (const candidate of candidateOpportunities) {
+      if (!candidate.title || !candidate.applicationUrl) continue;
 
-      const fullDesc = raw.description || raw.summary || title;
-      const cleanDesc = stripHtml(fullDesc);
-      const shortDesc = cleanDesc.length > 280 ? `${cleanDesc.substring(0, 277)}...` : cleanDesc;
-
-      const candidate = {
-        title,
-        shortDescription: shortDesc,
-        description: cleanDesc,
-        type: normalizeOpportunityType(raw.type || source.defaultOpportunityType),
-        category: raw.category || source.defaultCategory || 'General',
-        organization: raw.organization || raw.provider || source.name,
-        provider: source.name,
-        country: normalizeCountry(raw.country || source.defaultCountry),
-        region: raw.region || 'Worldwide',
-        applicationUrl: appUrl,
-        officialWebsite: source.websiteUrl,
-        sourceUrl: raw.sourceUrl || appUrl,
-        sourceName: source.name,
+      // 1. Log Raw Ingestion Audit Record
+      const ingestionRecord = await OpportunityIngestion.create({
         sourceId: source._id,
-        fundingType: normalizeFundingType(raw.fundingType || (title.toLowerCase().includes('fully funded') ? 'fully_funded' : 'other')),
-        degreeLevels: [normalizeDegreeLevel(raw.degreeLevel || (title.toLowerCase().includes('master') ? 'graduate' : title.toLowerCase().includes('phd') ? 'phd' : 'undergraduate'))],
-        fieldsOfStudy: [normalizeFieldOfStudy(raw.fieldOfStudy || 'General')],
-        deadline: raw.deadline ? new Date(raw.deadline) : detectDeadline(cleanDesc),
-        datePublished: raw.datePublished || new Date(),
-        status: 'published',
-        verificationStatus: source.autoPublish ? 'verified' : 'pending',
-      };
+        sourceName: source.name,
+        sourceUrl: candidate.applicationUrl,
+        rawTitle: candidate.title,
+        rawDescription: candidate.description,
+        rawContent: typeof rawPayload === 'string' ? rawPayload.substring(0, 5000) : '',
+        processingStatus: 'pending',
+      });
 
-      // Check for duplicate
-      const duplicate = await findDuplicate(candidate);
-      if (!duplicate) {
-        const newOpp = await Opportunity.create(candidate);
-        createdCount++;
+      // 2. Spam / Fraud Check
+      const fraudCheck = detectSpamOrFraud(candidate);
+      if (fraudCheck.isSpam) {
+        ingestionRecord.processingStatus = 'rejected';
+        ingestionRecord.processingErrors = [fraudCheck.reason];
+        await ingestionRecord.save();
+        flaggedCount++;
+        continue;
+      }
 
-        // Trigger background user notification if verified/published
-        if (newOpp.status === 'published' && newOpp.verificationStatus === 'verified') {
-          triggerMatchNotifications(newOpp).catch((err) =>
-            console.error('Error notifying users for new opportunity:', err)
-          );
-        }
+      // 3. Duplicate Detection 2.0
+      const existingDuplicate = await findDuplicate(candidate);
+      if (existingDuplicate) {
+        await mergeOpportunityIntoMaster(existingDuplicate, candidate, source);
+        ingestionRecord.processingStatus = 'duplicate_merged';
+        ingestionRecord.duplicateCandidateId = existingDuplicate._id;
+        ingestionRecord.extractedOpportunityId = existingDuplicate._id;
+        await ingestionRecord.save();
+        mergedCount++;
+        continue;
+      }
+
+      // 4. Quality Scoring
+      const qualityScore = calculateQualityScore(candidate, source);
+      candidate.qualityScore = qualityScore;
+
+      // 5. Automatic Publishing vs Verification Queue
+      const shouldAutoPublish =
+        source.autoPublish ||
+        (source.trustScore >= 75 && qualityScore >= 75 && candidate.deadline > new Date());
+
+      candidate.status = 'published';
+      candidate.verificationStatus = shouldAutoPublish ? 'verified' : 'pending';
+
+      const createdOpportunity = await Opportunity.create(candidate);
+      createdCount++;
+
+      // 6. Update Ingestion Log
+      ingestionRecord.processingStatus = 'processed';
+      ingestionRecord.qualityScore = qualityScore;
+      ingestionRecord.extractedOpportunityId = createdOpportunity._id;
+      await ingestionRecord.save();
+
+      // 7. Trigger User Match Notifications
+      if (createdOpportunity.verificationStatus === 'verified') {
+        triggerMatchNotifications(createdOpportunity).catch((err) =>
+          console.error('Match notification error:', err.message)
+        );
       }
     }
+
+    const durationSeconds = ((Date.now() - startTime) / 1000).toFixed(1);
+    console.log(
+      `[COLLECTOR] Source: ${source.name} | Status: SUCCESS | Found: ${candidateOpportunities.length} | New: ${createdCount} | Merged: ${mergedCount} | Duration: ${durationSeconds}s`
+    );
 
     // Update source health and stats
     source.lastSyncAt = new Date();
     source.lastSuccessAt = new Date();
     source.healthStatus = 'healthy';
     source.lastErrorMessage = '';
+    source.consecutiveFailures = 0;
     source.retryCount = 0;
     source.opportunitiesFound = (source.opportunitiesFound || 0) + createdCount;
     await source.save();
 
-    return { success: true, count: createdCount };
+    return {
+      success: true,
+      found: candidateOpportunities.length,
+      created: createdCount,
+      merged: mergedCount,
+      flagged: flaggedCount,
+    };
   } catch (error) {
-    console.error(`Source sync failed [${source.name}]:`, error.message);
+    console.error(`[COLLECTOR] Source: ${source.name} | Status: FAILED | Error: ${error.message}`);
     source.lastSyncAt = new Date();
     source.lastFailureAt = new Date();
     source.lastErrorMessage = error.message;
+    source.consecutiveFailures = (source.consecutiveFailures || 0) + 1;
     source.retryCount = (source.retryCount || 0) + 1;
-    source.healthStatus = source.retryCount >= 3 ? 'failed' : 'warning';
+    source.healthStatus = source.consecutiveFailures >= 3 ? 'failed' : 'warning';
     await source.save();
     return { success: false, error: error.message };
   }
@@ -267,72 +233,145 @@ const triggerMatchNotifications = async (opportunity) => {
 };
 
 /**
- * Seed initial trusted global opportunity feeds if the database is empty.
+ * Seed initial real, curated global opportunity feeds across all continents.
  */
 export const seedInitialSources = async () => {
   try {
     const existingCount = await OpportunitySource.countDocuments();
     if (existingCount > 0) return;
 
-    console.log('🌱 Seeding initial global opportunity sources...');
+    console.log('🌱 Seeding verified global opportunity sources across continents...');
 
     const seedSources = [
+      // Europe
       {
-        name: 'DAAD Scholarships Database',
+        name: 'DAAD Scholarships Database (Germany)',
         websiteUrl: 'https://www.daad.de/en/study-and-research-in-germany/scholarships/',
         sourceType: 'rss',
         rssUrl: 'https://www.daad.de/en/study-and-research-in-germany/scholarships/daad-scholarships/rss/',
+        sourceCategory: 'government',
         defaultOpportunityType: 'scholarship',
-        defaultCategory: 'Academic',
+        defaultCategory: 'Academic Excellence',
         defaultCountry: 'Germany',
+        region: 'Europe',
+        priority: 'high',
+        trustScore: 98,
         frequency: '6h',
         active: true,
         autoPublish: true,
       },
       {
-        name: 'Chevening International Scholarships',
+        name: 'Chevening International Scholarships (UK)',
         websiteUrl: 'https://www.chevening.org/scholarships/',
         sourceType: 'rss',
         rssUrl: 'https://www.chevening.org/feed/',
+        sourceCategory: 'government',
         defaultOpportunityType: 'scholarship',
         defaultCategory: 'Master Degrees',
         defaultCountry: 'United Kingdom',
+        region: 'Europe',
+        priority: 'high',
+        trustScore: 98,
         frequency: '6h',
         active: true,
         autoPublish: true,
       },
       {
-        name: 'Erasmus Mundus Joint Masters',
+        name: 'Erasmus+ & Erasmus Mundus Masters (EU)',
         websiteUrl: 'https://erasmus-plus.ec.europa.eu/',
         sourceType: 'rss',
         rssUrl: 'https://ec.europa.eu/programmes/erasmus-plus/rss_en.xml',
+        sourceCategory: 'international_org',
         defaultOpportunityType: 'scholarship',
-        defaultCategory: 'European Union Studies',
+        defaultCategory: 'European Union Joint Degrees',
         defaultCountry: 'Europe',
+        region: 'Europe',
+        priority: 'high',
+        trustScore: 99,
         frequency: '6h',
         active: true,
         autoPublish: true,
       },
       {
-        name: 'World Bank Fellowships & Grants',
-        websiteUrl: 'https://www.worldbank.org/en/programs/scholarships',
+        name: 'Commonwealth Scholarships Commission',
+        websiteUrl: 'https://cscuk.fcdo.gov.uk/scholarships/',
         sourceType: 'rss',
-        rssUrl: 'https://www.worldbank.org/en/news/rss',
-        defaultOpportunityType: 'grant',
-        defaultCategory: 'Development & Economics',
+        rssUrl: 'https://cscuk.fcdo.gov.uk/feed/',
+        sourceCategory: 'government',
+        defaultOpportunityType: 'scholarship',
+        defaultCategory: 'Commonwealth Development',
+        defaultCountry: 'United Kingdom',
+        region: 'Europe',
+        priority: 'high',
+        trustScore: 96,
+        frequency: '6h',
+        active: true,
+        autoPublish: true,
+      },
+
+      // Africa
+      {
+        name: 'Mandela Washington Fellowship for Young African Leaders',
+        websiteUrl: 'https://www.mandelawashingtonfellowship.org/',
+        sourceType: 'rss',
+        rssUrl: 'https://www.mandelawashingtonfellowship.org/feed/',
+        sourceCategory: 'foundation',
+        defaultOpportunityType: 'fellowship',
+        defaultCategory: 'Leadership & Public Service',
         defaultCountry: 'Worldwide',
+        region: 'Africa',
+        priority: 'high',
+        trustScore: 95,
+        frequency: '6h',
+        active: true,
+        autoPublish: true,
+      },
+      {
+        name: 'African Development Bank Careers & Fellowships',
+        websiteUrl: 'https://www.afdb.org/en/about-us/careers',
+        sourceType: 'rss',
+        rssUrl: 'https://www.afdb.org/en/news-and-events/rss',
+        sourceCategory: 'international_org',
+        defaultOpportunityType: 'internship',
+        defaultCategory: 'Economic Development',
+        defaultCountry: 'Worldwide',
+        region: 'Africa',
+        priority: 'normal',
+        trustScore: 94,
         frequency: '12h',
         active: true,
         autoPublish: true,
       },
+
+      // Global & International Organizations
       {
-        name: 'UN Careers & Internship Opportunities',
+        name: 'World Bank Scholarships & Fellowships',
+        websiteUrl: 'https://www.worldbank.org/en/programs/scholarships',
+        sourceType: 'rss',
+        rssUrl: 'https://www.worldbank.org/en/news/rss',
+        sourceCategory: 'international_org',
+        defaultOpportunityType: 'grant',
+        defaultCategory: 'Development & Economics',
+        defaultCountry: 'Worldwide',
+        region: 'Worldwide',
+        priority: 'high',
+        trustScore: 99,
+        frequency: '6h',
+        active: true,
+        autoPublish: true,
+      },
+      {
+        name: 'United Nations Careers & Internships',
         websiteUrl: 'https://careers.un.org/',
         sourceType: 'rss',
         rssUrl: 'https://www.un.org/press/en/feed',
+        sourceCategory: 'international_org',
         defaultOpportunityType: 'internship',
-        defaultCategory: 'International Relations',
+        defaultCategory: 'International Affairs',
         defaultCountry: 'Worldwide',
+        region: 'Worldwide',
+        priority: 'high',
+        trustScore: 99,
         frequency: '6h',
         active: true,
         autoPublish: true,
@@ -342,9 +381,77 @@ export const seedInitialSources = async () => {
         websiteUrl: 'https://www.unesco.org/en/youth',
         sourceType: 'rss',
         rssUrl: 'https://en.unesco.org/rss.xml',
+        sourceCategory: 'international_org',
         defaultOpportunityType: 'competition',
-        defaultCategory: 'Youth Innovation',
+        defaultCategory: 'Youth & Innovation',
         defaultCountry: 'Worldwide',
+        region: 'Worldwide',
+        priority: 'normal',
+        trustScore: 97,
+        frequency: '12h',
+        active: true,
+        autoPublish: true,
+      },
+
+      // North America & Global Tech
+      {
+        name: 'Fulbright Foreign Student Program',
+        websiteUrl: 'https://foreign.fulbrightonline.org/',
+        sourceType: 'approved_crawler',
+        sourceCategory: 'government',
+        defaultOpportunityType: 'scholarship',
+        defaultCategory: 'Graduate Studies',
+        defaultCountry: 'United States',
+        region: 'North America',
+        priority: 'high',
+        trustScore: 98,
+        frequency: '12h',
+        active: true,
+        autoPublish: true,
+      },
+      {
+        name: 'Mitacs Globalink Research Internships (Canada)',
+        websiteUrl: 'https://www.mitacs.ca/our-programs/globalink-research-internship-students/',
+        sourceType: 'approved_crawler',
+        sourceCategory: 'research_institution',
+        defaultOpportunityType: 'research',
+        defaultCategory: 'STEM & Innovation',
+        defaultCountry: 'Canada',
+        region: 'North America',
+        priority: 'normal',
+        trustScore: 96,
+        frequency: '12h',
+        active: true,
+        autoPublish: true,
+      },
+
+      // Asia & Oceania
+      {
+        name: 'Australia Awards Scholarships',
+        websiteUrl: 'https://www.dfat.gov.au/people-to-people/australia-awards',
+        sourceType: 'approved_crawler',
+        sourceCategory: 'government',
+        defaultOpportunityType: 'scholarship',
+        defaultCategory: 'International Development',
+        defaultCountry: 'Australia',
+        region: 'Oceania',
+        priority: 'high',
+        trustScore: 97,
+        frequency: '12h',
+        active: true,
+        autoPublish: true,
+      },
+      {
+        name: 'Study in Japan (MEXT) Scholarships',
+        websiteUrl: 'https://www.studyinjapan.go.jp/en/planning/scholarship/',
+        sourceType: 'approved_crawler',
+        sourceCategory: 'government',
+        defaultOpportunityType: 'scholarship',
+        defaultCategory: 'Higher Education in Japan',
+        defaultCountry: 'Japan',
+        region: 'Asia',
+        priority: 'high',
+        trustScore: 97,
         frequency: '12h',
         active: true,
         autoPublish: true,

@@ -168,7 +168,6 @@ export const normalizeCountry = (countryInput) => {
   if (!countryInput || typeof countryInput !== 'string') return 'Worldwide';
   const clean = countryInput.trim().toLowerCase();
   if (COUNTRY_ALIASES[clean]) return COUNTRY_ALIASES[clean];
-  // Capitalize words
   return countryInput
     .trim()
     .split(' ')
@@ -206,19 +205,20 @@ export const normalizeOpportunityType = (typeInput) => {
   if (!typeInput || typeof typeInput !== 'string') return 'scholarship';
   const clean = typeInput.trim().toLowerCase().replace(/[\s-]/g, '_');
   if (OPPORTUNITY_TYPES.includes(clean)) return clean;
+  // Specific educational & career opportunities first
+  if (clean.includes('scholar')) return 'scholarship';
   if (clean.includes('intern')) return 'internship';
   if (clean.includes('fellow')) return 'fellowship';
   if (clean.includes('grant')) return 'grant';
-  if (clean.includes('job') || clean.includes('career') || clean.includes('employment')) return 'job';
-  if (clean.includes('research')) return 'research';
-  if (clean.includes('train') || clean.includes('course') || clean.includes('workshop')) return 'training';
   if (clean.includes('compet') || clean.includes('contest') || clean.includes('hackathon')) return 'competition';
   if (clean.includes('exchange')) return 'exchange';
   if (clean.includes('graduate')) return 'graduate_programme';
+  if (clean.includes('research')) return 'research';
+  if (clean.includes('train') || clean.includes('course') || clean.includes('workshop')) return 'training';
   if (clean.includes('volunteer')) return 'volunteer';
   if (clean.includes('conf') || clean.includes('event') || clean.includes('summit')) return 'conference';
   if (clean.includes('entrepreneur') || clean.includes('startup')) return 'entrepreneurship';
+  if (clean.includes('job') || clean.includes('career') || clean.includes('employment')) return 'job';
   if (clean.includes('fund')) return 'funding';
-  if (clean.includes('scholar')) return 'scholarship';
   return 'other';
 };

@@ -7,7 +7,6 @@ export const normalizeUrl = (url) => {
   if (!url || typeof url !== 'string') return '';
   try {
     const parsed = new URL(url.trim());
-    // remove common tracking query params
     const paramsToRemove = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'ref', 'source'];
     paramsToRemove.forEach((p) => parsed.searchParams.delete(p));
     let clean = `${parsed.hostname.replace(/^www\./, '')}${parsed.pathname}`;
@@ -72,6 +71,7 @@ export const findDuplicate = async (candidate) => {
       $or: [
         { applicationUrl: candidate.applicationUrl },
         { sourceUrl: candidate.applicationUrl },
+        { 'sources.url': candidate.applicationUrl },
       ],
     }).limit(1);
 
@@ -81,7 +81,11 @@ export const findDuplicate = async (candidate) => {
   // 2. Direct match on sourceUrl
   if (sourceUrl) {
     const existing = await Opportunity.findOne({
-      $or: [{ sourceUrl }, { applicationUrl: sourceUrl }],
+      $or: [
+        { sourceUrl },
+        { applicationUrl: sourceUrl },
+        { 'sources.url': sourceUrl },
+      ],
     });
     if (existing) return existing;
   }
@@ -119,4 +123,30 @@ export const findDuplicate = async (candidate) => {
   }
 
   return null;
+};
+
+/**
+ * Merge a duplicate citation into an existing master Opportunity record.
+ */
+export const mergeOpportunityIntoMaster = async (masterOpp, candidate, source = {}) => {
+  const newCitation = {
+    name: candidate.sourceName || source.name || 'Additional Opportunity Source',
+    url: candidate.sourceUrl || candidate.applicationUrl,
+    sourceId: source._id || candidate.sourceId,
+    firstDiscovered: new Date(),
+    lastVerified: new Date(),
+  };
+
+  // Avoid adding exact duplicate source URLs to the citation array
+  const alreadyCited = masterOpp.sources.some(
+    (s) => normalizeUrl(s.url) === normalizeUrl(newCitation.url)
+  );
+
+  if (!alreadyCited) {
+    masterOpp.sources.push(newCitation);
+    masterOpp.isMerged = true;
+    await masterOpp.save();
+  }
+
+  return masterOpp;
 };

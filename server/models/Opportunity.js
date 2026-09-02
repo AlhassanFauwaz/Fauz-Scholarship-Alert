@@ -11,6 +11,20 @@ const generateSlug = (title) => {
   return `${base.substring(0, 80)}-${randomSuffix}`;
 };
 
+const sourceCitationSchema = new mongoose.Schema({
+  name: { type: String, trim: true },
+  url: { type: String, trim: true },
+  sourceId: { type: mongoose.Schema.Types.ObjectId, ref: 'OpportunitySource' },
+  firstDiscovered: { type: Date, default: Date.now },
+  lastVerified: { type: Date, default: Date.now },
+});
+
+const duplicateCandidateSchema = new mongoose.Schema({
+  opportunityId: { type: mongoose.Schema.Types.ObjectId, ref: 'Opportunity' },
+  confidence: { type: Number, min: 0, max: 100 },
+  detectedAt: { type: Date, default: Date.now },
+});
+
 const opportunitySchema = new mongoose.Schema({
   title: {
     type: String,
@@ -213,6 +227,35 @@ const opportunitySchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'OpportunitySource',
   },
+  sources: {
+    type: [sourceCitationSchema],
+    default: [],
+  },
+  qualityScore: {
+    type: Number,
+    min: 0,
+    max: 100,
+    default: 75,
+  },
+  classificationConfidence: {
+    type: Number,
+    min: 0,
+    max: 100,
+    default: 85,
+  },
+  duplicateCandidates: {
+    type: [duplicateCandidateSchema],
+    default: [],
+  },
+  isMerged: {
+    type: Boolean,
+    default: false,
+  },
+  linkStatus: {
+    type: String,
+    enum: ['healthy', 'link_broken', 'unverified'],
+    default: 'unverified',
+  },
   openingDate: Date,
   deadline: {
     type: Date,
@@ -220,7 +263,7 @@ const opportunitySchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['draft', 'published', 'expired', 'archived'],
+    enum: ['draft', 'published', 'expired', 'archived', 'flagged_review'],
     default: 'published',
   },
   verificationStatus: {
@@ -279,6 +322,16 @@ opportunitySchema.pre('save', function () {
   if (!this.slug) {
     this.slug = generateSlug(this.title);
   }
+  // Initialize sources array with initial source if empty
+  if (this.sources.length === 0 && (this.sourceName || this.sourceUrl)) {
+    this.sources.push({
+      name: this.sourceName || this.organization,
+      url: this.sourceUrl || this.applicationUrl,
+      sourceId: this.sourceId,
+      firstDiscovered: this.dateDiscovered || new Date(),
+      lastVerified: new Date(),
+    });
+  }
   // Synchronize legacy and new eligibility fields if one is provided
   if (this.eligibility?.fieldOfStudy && (!this.fieldsOfStudy || this.fieldsOfStudy.length === 0)) {
     this.fieldsOfStudy = [this.eligibility.fieldOfStudy];
@@ -306,7 +359,7 @@ opportunitySchema.index({ status: 1, type: 1, createdAt: -1 });
 opportunitySchema.index({ status: 1, country: 1 });
 opportunitySchema.index({ status: 1, isRemote: 1 });
 opportunitySchema.index({ status: 1, featured: 1 });
-opportunitySchema.index({ verificationStatus: 1 });
+opportunitySchema.index({ verificationStatus: 1, qualityScore: -1 });
 opportunitySchema.index({ dateDiscovered: -1 });
 
 const Opportunity = mongoose.model('Opportunity', opportunitySchema);

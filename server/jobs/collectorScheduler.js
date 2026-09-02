@@ -2,6 +2,8 @@ import cron from 'node-cron';
 import OpportunitySource from '../models/OpportunitySource.js';
 import { syncSource } from '../services/collectorService.js';
 
+let collectorJob = null;
+
 const FREQUENCY_INTERVALS_MS = {
   '15m': 15 * 60 * 1000,
   '30m': 30 * 60 * 1000,
@@ -11,27 +13,47 @@ const FREQUENCY_INTERVALS_MS = {
   '24h': 24 * 60 * 60 * 1000,
 };
 
-export const startCollectorScheduler = () => {
-  // Check active sources every 10 minutes
-  cron.schedule('*/10 * * * *', async () => {
-    try {
-      const now = Date.now();
-      const activeSources = await OpportunitySource.find({ active: true });
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-      for (const source of activeSources) {
-        const intervalMs = FREQUENCY_INTERVALS_MS[source.frequency] || FREQUENCY_INTERVALS_MS['6h'];
-        const lastSyncTime = source.lastSyncAt ? new Date(source.lastSyncAt).getTime() : 0;
+/**
+ * Sweeps active sources and synchronizes those that are due based on priority & frequency.
+ */
+export const runCollectorSweep = async () => {
+  try {
+    const activeSources = await OpportunitySource.find({
+      active: true,
+      status: 'active',
+      healthStatus: { $ne: 'disabled' },
+    }).sort({ priority: -1, lastSyncAt: 1 });
 
-        // If never synced or time elapsed exceeds interval
-        if (now - lastSyncTime >= intervalMs) {
-          console.log(`📡 Collecting from source: ${source.name} (${source.sourceType})`);
-          await syncSource(source);
-        }
+    const now = new Date();
+
+    for (const source of activeSources) {
+      const intervalMs = FREQUENCY_INTERVALS_MS[source.frequency] || FREQUENCY_INTERVALS_MS['6h'];
+      const lastSync = source.lastSyncAt ? new Date(source.lastSyncAt).getTime() : 0;
+      const isDue = now.getTime() - lastSync >= intervalMs;
+
+      if (isDue) {
+        console.log(`⏰ Scheduled collector sync due for: ${source.name} [Priority: ${source.priority}]`);
+        await syncSource(source);
+        // Rate-limiting delay between external requests
+        await delay(source.requestDelayMs || 1000);
       }
-    } catch (error) {
-      console.error('Collector scheduler execution failed:', error.message);
     }
-  });
+  } catch (error) {
+    console.error('Collector scheduler sweep error:', error.message);
+  }
+};
 
-  console.log('🕒 Opportunity collector scheduler initialized (runs every 10 minutes).');
+/**
+ * Initializes the recurring collector cron job (runs every 10 minutes).
+ */
+export const initCollectorScheduler = () => {
+  if (collectorJob) return;
+
+  console.log('🤖 Opportunity Collector Scheduler initialized (Every 10 minutes).');
+
+  collectorJob = cron.schedule('*/10 * * * *', async () => {
+    await runCollectorSweep();
+  });
 };
